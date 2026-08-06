@@ -1,0 +1,90 @@
+# .github/workflows/lint.yml
+#
+# CI: format + lint. Runs on every push and PR.
+# - clang-format --dry-run --Werror fails the build on any diff
+# - clang-tidy runs the LLVM check set; warnings do not block
+#   the build yet (set WARN_AS_ERROR in .clang-tidy to harden
+#   once the tree is fully clean).
+#
+# Build matrix is intentionally minimal here (ubuntu + clang) — the
+# heavier matrix (linux+gcc, macos+clang) lives in build.yml.
+
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang
+
+      - name: Find files
+        id: find
+        run: |
+          {
+            echo "files<<EOF"
+            find include src tests -type f \( -name '*.hpp' -o -name '*.cpp' \)
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: clang-format --dry-run --Werror
+        run: |
+          echo "${{ steps.find.outputs.files }}" \
+            | xargs clang-format --dry-run --Werror
+
+  tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang + cmake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang clang-tidy cmake ninja-build
+
+      - name: Configure (compile_commands.json)
+        run: |
+          # Generate a minimal compile_commands.json so run-clang-tidy
+          # can see every TU. We don't have CMake yet, so we synthesize
+          # it from the Makefile rule list.
+          python3 scripts/gen_compile_db.py \
+            --makefile Makefile \
+            --cxx clang++ \
+            --cxxflags "-std=c++23 -O2 -Wall -Wextra -Wpedantic -pthread -Iinclude" \
+            --out build/compile_commands.json
+
+      - name: run-clang-tidy
+        run: |
+          # Tidy every public header TU. Tests are also analyzed.
+          run-clang-tidy \
+            -p build \
+            -j "$(nproc)" \
+            -quiet \
+            $(find include src tests -type f \( -name '*.hpp' -o -name '*.cpp' \)) \
+            | tee build/tidy.log
+
+      - name: Upload tidy log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-log
+          path: build/tidy.log
+          if-no-files-found: ignore
