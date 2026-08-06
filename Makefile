@@ -51,14 +51,28 @@ $(SECURITY_TESTS_BIN): $(SECURITY_TESTS).cpp \
                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
-test: $(SECURITY_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN); do \
+MEM_TESTS := $(TEST_DIR)/unit/mem/arena_test \
+             $(TEST_DIR)/unit/mem/pool_test
+MEM_TESTS_BIN := $(addsuffix .bin,$(MEM_TESTS))
+
+$(MEM_TESTS_BIN): $(TEST_DIR)/test_framework.hpp
+
+$(TEST_DIR)/unit/mem/arena_test.bin: $(TEST_DIR)/unit/mem/arena_test.cpp \
+                                     include/neuro/mem/arena.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
+                                    include/neuro/mem/pool.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
 
 clean:
 	rm -f $(BIN)
-	rm -f $(SECURITY_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
 
 .PHONY: all run test clean

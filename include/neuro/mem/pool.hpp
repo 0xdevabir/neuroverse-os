@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <type_traits>
 #include <utility>
 
 namespace neuro::mem {
@@ -81,7 +82,9 @@ public:
     template <class U>
     void destroy(U* p) noexcept {
         if (!p) return;
-        p->~U();
+        if constexpr (!std::is_void_v<U>) {
+            p->~U();
+        }
         deallocate(p);
     }
 
