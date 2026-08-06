@@ -108,7 +108,8 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
-                    $(TEST_DIR)/integration/net_echo
+                    $(TEST_DIR)/integration/net_echo \
+                    $(TEST_DIR)/integration/fs_memfs
 INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
 
 $(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp \
@@ -134,6 +135,17 @@ $(TEST_DIR)/integration/net_echo.bin: $(TEST_DIR)/integration/net_echo.cpp \
                                        include/neuro/net/udp_socket.hpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+# fs_memfs links the MemFS + OverlayFS implementation objects.
+$(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
+                                       include/neuro/fs/memfs.hpp \
+                                       include/neuro/fs/overlayfs.hpp \
+                                       include/neuro/fs/vfs.hpp \
+                                       include/neuro/fs/vnode.hpp \
+                                       include/neuro/core/result.hpp \
+                                       neuro_memfs.o neuro_overlayfs.o \
+                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
 test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
