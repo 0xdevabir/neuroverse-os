@@ -32,7 +32,33 @@ $(BIN): src/scratch/main.cpp \
 run: $(BIN)
 	./$(BIN)
 
+# ---- Tests --------------------------------------------------------------
+# Each .cpp file under tests/unit/<subsystem>/ is a standalone test binary
+# that links only against the public headers under include/. As subsystems
+# grow, add their tests here with the same pattern.
+
+TEST_DIR := tests
+TEST_INCLUDES := $(INCLUDES) -I.
+
+SECURITY_TESTS := $(TEST_DIR)/unit/sec/capability_test
+SECURITY_TESTS_BIN := $(addsuffix .bin,$(SECURITY_TESTS))
+
+$(SECURITY_TESTS_BIN): $(SECURITY_TESTS).cpp \
+                       include/neuro/core/capability.hpp \
+                       include/neuro/sec/cap_space.hpp \
+                       include/neuro/sec/epoch.hpp \
+                       include/neuro/sec/cap_ops.hpp \
+                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+test: $(SECURITY_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN); do \
+	    echo "==> $$t"; \
+	    ./$$t || exit $$?; \
+	done
+
 clean:
 	rm -f $(BIN)
+	rm -f $(SECURITY_TESTS_BIN)
 
-.PHONY: all run clean
+.PHONY: all run test clean

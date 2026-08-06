@@ -90,7 +90,7 @@ public:
         }
         const auto h = dst.insert(*cap);
         if (h == kInvalidHandle) return out;
-        if (take) src.erase(src_handle);
+        if (take) (void)src.erase(src_handle);
         out.handle = h;
         out.ok     = true;
         return out;
