@@ -1,6 +1,6 @@
 // neuro/sched/work_stealing.hpp
 //
-// Work-stealing scheduler.
+// Work-stealing scheduler (host scaffold).
 //
 // Per README §4.5:
 //   - A global injector queue (MPMC deque) so newly-posted work is
@@ -8,7 +8,7 @@
 //   - Per-worker local deques so workers can pop LIFO from the hot
 //     path.
 //   - steal(): a victim worker exposes its local deque head for
-//     another worker to take from. The classic "work-stealing" pattern.
+//     another worker to take from.
 //
 // Algorithm (Chase-Lev style, simplified for the host):
 //   - Owner pop: LIFO from local (push/pop tail).
@@ -51,7 +51,6 @@ public:
     void stop_all();
 
     // Test helpers.
-    [[nodiscard]] std::vector<std::size_t> local_sizes() const;
     [[nodiscard]] std::size_t global_size() const;
 
 private:
@@ -64,14 +63,6 @@ private:
 
         void join();
 
-        // LIFO from local.
-        [[nodiscard]] std::coroutine_handle<> pop_local();
-
-        // FIFO from a victim's local (oldest work moves around).
-        [[nodiscard]] std::coroutine_handle<> steal();
-
-        [[nodiscard]] std::size_t local_size() const;
-
     private:
         void run();
 
@@ -80,16 +71,16 @@ private:
         Scheduler&                          sched_;
         std::size_t                         id_;
         std::thread                         thread_;
-        mutable std::mutex                  mu_;
-        std::deque<std::coroutine_handle<>> local_;
     };
 
-    [[nodiscard]] std::coroutine_handle<> try_get(Worker& self);
+    std::coroutine_handle<> try_get(Worker& self);
 
     std::vector<std::unique_ptr<Worker>>        workers_;
-    std::deque<std::coroutine_handle<>>         global_;
+    // Bounded global injector. For the host scaffold we use a single
+    // mutex + std::deque as a simple FIFO queue (push_back + pop_front).
     mutable std::mutex                          global_mu_;
     std::condition_variable                     global_cv_;
+    std::deque<std::coroutine_handle<>>         global_;
     std::atomic<bool>                           done_{false};
 };
 

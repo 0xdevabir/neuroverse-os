@@ -24,27 +24,6 @@ void Scheduler::Worker::join() {
     }
 }
 
-std::coroutine_handle<> Scheduler::Worker::pop_local() {
-    std::lock_guard lk(mu_);
-    if (local_.empty()) return nullptr;
-    auto h = local_.back();
-    local_.pop_back();
-    return h;
-}
-
-std::coroutine_handle<> Scheduler::Worker::steal() {
-    std::lock_guard lk(mu_);
-    if (local_.empty()) return nullptr;
-    auto h = local_.front();
-    local_.pop_front();
-    return h;
-}
-
-std::size_t Scheduler::Worker::local_size() const {
-    std::lock_guard lk(mu_);
-    return local_.size();
-}
-
 void Scheduler::Worker::run() {
     while (!sched_.done_.load(std::memory_order_acquire)) {
         auto h = sched_.try_get(*this);
@@ -52,14 +31,8 @@ void Scheduler::Worker::run() {
             h.resume();
             continue;
         }
-        // Idle: wait briefly for work or shutdown.
-        std::unique_lock lk(sched_.global_mu_);
-        sched_.global_cv_.wait_for(
-            lk, std::chrono::milliseconds(1),
-            [&] {
-                return sched_.done_.load(std::memory_order_acquire) ||
-                       !sched_.global_.empty();
-            });
+        // Spin: yield to scheduler and try again.
+        std::this_thread::yield();
     }
 }
 
@@ -80,18 +53,11 @@ void Scheduler::post(std::coroutine_handle<> h) {
         std::lock_guard lk(global_mu_);
         global_.push_back(h);
     }
-    global_cv_.notify_one();
+    global_cv_.notify_all();
 }
 
 std::size_t Scheduler::worker_count() const noexcept {
     return workers_.size();
-}
-
-std::vector<std::size_t> Scheduler::local_sizes() const {
-    std::vector<std::size_t> out;
-    out.reserve(workers_.size());
-    for (const auto& w : workers_) out.push_back(w->local_size());
-    return out;
 }
 
 std::size_t Scheduler::global_size() const {
@@ -106,20 +72,7 @@ void Scheduler::stop_all() {
 }
 
 std::coroutine_handle<> Scheduler::try_get(Worker& self) {
-    if (auto h = self.pop_local()) return h;
-
-    // Try stealing from a sibling. Start from self.id+1 to avoid
-    // always hammering the same victim.
-    if (workers_.size() > 1) {
-        const auto start = (self.id_ + 1) % workers_.size();
-        for (std::size_t i = 0; i < workers_.size() - 1; ++i) {
-            const auto idx = (start + i) % workers_.size();
-            if (idx == self.id_) continue;
-            if (auto h = workers_[idx]->steal()) return h;
-        }
-    }
-
-    // Finally, drain the global injector.
+    (void)self;
     std::coroutine_handle<> h;
     {
         std::lock_guard lk(global_mu_);
