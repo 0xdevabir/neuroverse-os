@@ -18,16 +18,26 @@ endif
 
 BIN := neuro_scratch
 
+# Neuro static library (grows as more subsystems land .cpp impls).
+NEURO_LIB_OBJ := neuro_lib.o
+$(NEURO_LIB_OBJ): src/proc/thread.cpp \
+                  include/neuro/proc/thread.hpp \
+                  include/neuro/sec/cap_space.hpp \
+                  include/neuro/core/kobject.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
 all: $(BIN)
 
 $(BIN): src/scratch/main.cpp \
+        $(NEURO_LIB_OBJ) \
         include/neuro/core/result.hpp \
         include/neuro/core/capability.hpp \
         include/neuro/core/endpoint.hpp \
         include/neuro/sched/scheduler.hpp \
         include/neuro/net/channel.hpp \
-        include/neuro/mem/arena.hpp
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $< -o $@
+        include/neuro/mem/arena.hpp \
+        include/neuro/proc/thread.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(NEURO_LIB_OBJ) -o $@
 
 run: $(BIN)
 	./$(BIN)
@@ -73,6 +83,7 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
 
 clean:
 	rm -f $(BIN)
+	rm -f $(NEURO_LIB_OBJ)
 	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
 
 .PHONY: all run test clean

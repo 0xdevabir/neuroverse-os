@@ -6,7 +6,9 @@
 neuro_lib = static_library(
   'neuro',
   include_directories : incdir,
-  sources : [],   # header-only at this stage; real .cpp files arrive per subsystem
+  sources : [
+    'proc/thread.cpp',
+  ],
   gnu_symbol_visibility : 'hidden',
 )
 
