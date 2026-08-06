@@ -9,6 +9,7 @@ neuro_lib = static_library(
   sources : [
     'proc/thread.cpp',
     'proc/process.cpp',
+    'sched/work_stealing.cpp',
   ],
   gnu_symbol_visibility : 'hidden',
 )
