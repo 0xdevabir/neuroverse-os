@@ -1,0 +1,65 @@
+# NeuroVerse OS — .gitignore
+
+# Build directories
+build/
+build-*/
+out/
+dist/
+
+# Object files / compiled artifacts
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.bin
+
+# Generated binaries
+neuro_scratch
+*.iso
+*.img
+*.elf
+
+# CMake / Meson / Ninja
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.bak
+*.ninja
+.ninja_deps
+.ninja_log
+meson-info/
+meson-logs/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS junk
+Thumbs.db
+
+# Generated docs
+docs/api/html/
+docs/build/
+
+# Coverage / sanitizers
+*.gcda
+*.gcno
+*.gcov
+coverage/
+*.profraw
+*.profdata
+
+# Dependencies (when added later)
+vcpkg/
+conan/
+
+# Logs
+*.log
