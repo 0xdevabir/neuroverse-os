@@ -1,0 +1,198 @@
+# .clang-format
+#
+# NeuroVerse OS coding style. Built on LLVM base so contributors used
+# to LLVM/Clang can drop in without surprises, then overridden with
+# project-specific rules below.
+#
+# Run:
+#   clang-format --dry-run --Werror include/ src/ tests/
+#   find include/ src/ tests/ -name '*.hpp' -o -name '*.cpp' \
+#        | xargs clang-format -i
+
+---
+Language:        Cpp
+Standard:        c++23
+BasedOnStyle:    LLVM
+AccessModifierOffset: -2
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveMacros: Consecutive
+AlignEscapedNewlines: Left
+AlignOperands:   Align
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
+AttributeMacros:
+  - NEURO_EXPECTS
+  - NEURO_ENSURES
+  - NEURO_INVARIANT
+  - NEURO_MEASURE
+BinPackArguments: false
+BinPackParameters: false
+BitFieldColonSpacing: Both
+BraceWrapping:
+  AfterCaseLabel:  false
+  AfterClass:      true
+  AfterControlStatement: Always
+  AfterEnum:       true
+  AfterFunction:   true
+  AfterNamespace:  true
+  AfterObjCDeclaration: true
+  AfterStruct:     true
+  AfterUnion:      true
+  AfterExternBlock: true
+  BeforeCatch:     true
+  BeforeElse:      true
+  BeforeLambdaBody: false
+  BeforeWhile:     false
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Custom
+BreakBeforeInheritanceList: true
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializersBeforeComma: true
+BreakConstructorInitializers: BeforeComma
+BreakStringLiterals: false
+ColumnLimit:     90
+CommentPragmas:  '^\s*\\brief|^\s*\\file'
+CompactNamespaces: false
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+DeriveLineEnding: false
+DerivePointerAlignment: false
+DisableFormat:   false
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: Always
+ExperimentalAutoDetectBinPacking: false
+FixNamespaceComments: true
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+IfMacros:
+  - KJ_IF
+  - KJ_MAYBE
+IncludeBlocks:   Regroup
+IncludeCategories:
+  - Regex:           '^<neuro/.*\.hpp>$'
+    Priority:        1
+  - Regex:           '^<neuro/.*\.h>$'
+    Priority:        1
+  - Regex:           '^<[a-z_]+>$'
+    Priority:        2
+  - Regex:           '^<[a-z_]+/.*>$'
+    Priority:        3
+  - Regex:           '.*'
+    Priority:        4
+IncludeIsMainRegex: '(Test|_test)\.cpp$'
+IncludeSortOrder: true
+IndentCaseLabels: true
+IndentExternBlock: AfterExternBlock
+IndentGotoLabels: false
+IndentPPDirectives: None
+IndentRequires:  false
+IndentWidth:     4
+IndentWrappedFunctionNames: false
+InsertBraces:    false
+InsertNewlineAtEOF: true
+InsertTrailingCommas: Wrapped
+KeepEmptyLinesAtTheStartOfBlocks: false
+LambdaBodyIndentation: OuterScope
+LineEnding:      LF
+MacroBlockBegin: ''
+MacroBlockEnd:   ''
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+NamespaceMacros:
+  - NEURO_NAMESPACE
+ObjCBinPackProtocolList: Auto
+ObjCBlockIndentWidth: 4
+ObjCBreakBeforeNestedBlockParam: true
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+PenaltyBreakAssignment: 150
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyExcessCharacter: 1000000
+PenaltyIndentedWhitespace: 0
+PenaltyReturnTypeOnItsOwnLine: 60
+PointerAlignment: Right
+PPIndentWidth:   -1
+QualifierAlignment: Left
+ReferenceAlignment: Pointer
+ReflowComments:  true
+RemoveBracesLLVM: false
+RemoveParenthesesFromContainedMacros: true
+RemoveSemicolon: false
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: Outer
+SeparateDefinitionBlocks: Always
+ShortNamespaceLines: 1
+SortIncludes:    CaseSensitive
+SortUsingDeclarations: true
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterForeachMacros: true
+  AfterFunctionDeclarationName: false
+  AfterFunctionDefinitionName: false
+  AfterIfMacros: true
+  AfterOverloadedOperator: false
+  AfterRequiresInClause: false
+  AfterRequiresInExpression: false
+  BeforeNonEmptyParenthesesInFunctionCall: false
+  BeforeNonEmptyParenthesesInFunctionDeclaration: false
+  BeforeOverloadedOperator: false
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles:  false
+SpacesInContainerLiterals: true
+SpacesInConditionalStatement: false
+SpacesInLineCommentPrefix:
+  Minimum:         1
+  Maximum:         -1
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+StatementAttributeLikeMacros:
+  - NEURO_EXPECTS
+  - NEURO_ENSURES
+  - NEURO_INVARIANT
+  - NEURO_MEASURE
+StatementMacros:
+  - Q_UNUSED
+  - QT_REQUIRE_VERSION
+TabWidth:        4
+UseTab:          Never
+VerilogBreakBetweenInstancePort: true
+WhitespaceSensitiveMacros:
+  - BOOST_PP_STRINGIZE
+  - BOOST_PP_CAT
+  - BOOST_PP_ASSIGN
+  - STRINGIZE
+  - MAKE_STRING

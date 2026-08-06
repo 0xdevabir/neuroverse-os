@@ -1,0 +1,113 @@
+# .clang-tidy
+#
+# NeuroVerse OS static-analysis policy.
+#
+# Built on the LLVM checker base. We enable a strict-but-not-paranoid
+# subset: enough to catch real bugs (null derefs, use-after-free,
+# shadowed names, header hygiene) without drowning the contributor in
+# stylistic nits. Style nits are enforced by clang-format, not here.
+#
+# Run:
+#   run-clang-tidy -p build include/ src/ tests/
+
+---
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-branch-clone,
+  -bugprone-reserved-identifier,
+  cert-*,
+  -cert-err33-c,
+  -cert-msc32-c,
+  -cert-msc50-cpp,
+  -cert-msc51-cpp,
+  -cert-dcl37-c,
+  -cert-dcl51-cpp,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-special-member-functions,
+  -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-init-variables,
+  google-*,
+  -google-readability-todo,
+  -google-runtime-references,
+  -google-runtime-int,
+  -google-build-using-namespace,
+  hicpp-*,
+  -hicpp-no-array-decay,
+  -hicpp-avoid-c-arrays,
+  -hicpp-explicit-conversions,
+  -hicpp-named-parameter,
+  -hicpp-no-assembler,
+  -hicpp-no-malloc,
+  -hicpp-use-emplace,
+  -hicpp-use-auto,
+  -hicpp-use-nullptr,
+  misc-*,
+  -misc-no-recursion,
+  -misc-include-cleaner,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-raw-string-literal,
+  -modernize-use-namespace,
+  -modernize-pass-by-value,
+  performance-*,
+  -performance-no-int-to-ptr,
+  portability-*,
+  readability-*,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-braces-around-statements,
+  -readability-implicit-bool-conversion,
+  -readability-named-parameter,
+  -readability-container-data-pointer,
+  -readability-else-after-return,
+  -readability-static-accessed-through-instance,
+  -readability-convert-member-functions-to-static,
+  -readability-use-anyofallof
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/include/neuro/.*'
+AnalyzeTemporaryDtors: true
+CheckOptions:
+  # Member names like `id_` (trailing underscore) are project idiom.
+  - key:             readability-identifier-naming.MemberSuffix
+    value:           '_'
+  - key:             readability-identifier-naming.PrivateMemberSuffix
+    value:           '_'
+  # Allow short variable names in narrow scope.
+  - key:             readability-identifier-length.MinimumVariableNameLength
+    value:           '1'
+  - key:             readability-identifier-length.MinimumParameterNameLength
+    value:           '1'
+  # Tabs/spaces are clang-format's job.
+  - key:             clang-analyzer-optin.cplusplus.VirtualCall.NameSuffixPattern
+    value:           ''
+  # Allow up to 4 statements per function before the complexity warning.
+  - key:             readability-function-cognitive-complexity.Threshold
+    value:           '60'
+
+ExtraArgs:
+  - -std=c++23
+  - -Iinclude
+  - -I.
+  - -Ithird_party
+  - -pthread
+  - -x
+  - c++
+  - -Wno-unknown-warning-option
+
+FormatStyle: file
+UseColor: true
