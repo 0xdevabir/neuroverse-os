@@ -92,7 +92,8 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
                                     include/neuro/mem/pool.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
-INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal
+INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
+                    $(TEST_DIR)/integration/ipc_pingpong
 INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
 
 $(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp \
@@ -100,6 +101,14 @@ $(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp
                                           $(NEURO_LIB_OBJS) \
                                           $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< $(NEURO_LIB_OBJS) -o $@
+
+# ipc_pingpong is header-only on the host — no NEURO_LIB_OBJS needed.
+$(TEST_DIR)/integration/ipc_pingpong.bin: $(TEST_DIR)/integration/ipc_pingpong.cpp \
+                                           include/neuro/ipc/endpoint.hpp \
+                                           include/neuro/ipc/endpoint_pair.hpp \
+                                           include/neuro/ipc/message.hpp \
+                                           $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
