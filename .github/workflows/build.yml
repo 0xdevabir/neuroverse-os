@@ -1,0 +1,59 @@
+# GitHub Actions: build matrix
+# Mirrors README §5 toolchain: clang++ 17+, gcc 14+, Linux + macOS.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang++-17
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: g++-14
+          - os: macos-latest
+            compiler: clang
+            cc: clang++
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies (clang)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'clang'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-17
+
+      - name: Install Linux dependencies (gcc)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+
+      - name: Build (Makefile path)
+        run: make CXX=${{ matrix.cc }}
+
+      - name: Run demo
+        run: ./neuro_scratch
+
+      - name: Build (Meson path)
+        run: |
+          pip install --user meson ninja
+          python -m meson setup build
+          python -m meson compile -C build
