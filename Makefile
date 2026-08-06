@@ -17,6 +17,7 @@ CXXFLAGS += $(CORO_FLAG)
 endif
 
 BIN := neuro_scratch
+UMBRELLA_BIN := neuro_lib_smoke
 
 # Neuro static library (grows as more subsystems land .cpp impls).
 # Each .cpp compiles into its own .o; we link them all into the
@@ -101,7 +102,7 @@ neuro_boot.o: src/boot/protocol.cpp \
               include/neuro/boot/protocol.hpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-all: $(BIN)
+all: $(BIN) $(UMBRELLA_BIN)
 
 $(BIN): src/scratch/main.cpp \
         $(NEURO_LIB_OBJS) \
@@ -114,8 +115,18 @@ $(BIN): src/scratch/main.cpp \
         include/neuro/proc/thread.hpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(NEURO_LIB_OBJS) -o $@
 
+# Smoke test for the NeuroLib umbrella header — exercises one call
+# from every subsystem. Built alongside the main demo.
+$(UMBRELLA_BIN): src/scratch/neuro_lib_smoke.cpp \
+                  $(NEURO_LIB_OBJS) \
+                  include/neuro/neuro.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(NEURO_LIB_OBJS) -o $@
+
 run: $(BIN)
 	./$(BIN)
+
+run-umbrella: $(UMBRELLA_BIN)
+	./$(UMBRELLA_BIN)
 
 # ---- Tests --------------------------------------------------------------
 # Each .cpp file under tests/unit/<subsystem>/ is a standalone test binary
@@ -198,7 +209,7 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 	done
 
 clean:
-	rm -f $(BIN)
+	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
 	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
