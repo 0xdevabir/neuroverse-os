@@ -21,7 +21,7 @@ BIN := neuro_scratch
 # Neuro static library (grows as more subsystems land .cpp impls).
 # Each .cpp compiles into its own .o; we link them all into the
 # executables. This keeps the rule list flat as we add subsystems.
-NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o
+NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o neuro_memfs.o
 
 neuro_thread.o: src/proc/thread.cpp \
                 include/neuro/proc/thread.hpp \
@@ -41,6 +41,13 @@ neuro_process.o: src/proc/process.cpp \
 
 neuro_ws.o: src/sched/work_stealing.cpp \
            include/neuro/sched/work_stealing.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+neuro_memfs.o: src/fs/memfs.cpp \
+               include/neuro/fs/memfs.hpp \
+               include/neuro/fs/vfs.hpp \
+               include/neuro/fs/vnode.hpp \
+               include/neuro/core/result.hpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 all: $(BIN)
