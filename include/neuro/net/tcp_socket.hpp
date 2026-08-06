@@ -71,8 +71,8 @@ public:
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_port   = htons(peer.port);
-        std::uint32_t ho = peer.ip.host_order();
-        std::memcpy(&a.sin_addr.s_addr, &ho, sizeof(a.sin_addr.s_addr));
+        // sin_addr.s_addr is network byte order; convert from host.
+        a.sin_addr.s_addr = htonl(peer.ip.host_order());
         if (::connect(s.fd_, reinterpret_cast<sockaddr*>(&a),
                       sizeof(a)) != 0) {
             int err = errno;
@@ -98,8 +98,7 @@ public:
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_port   = htons(local.port);
-        std::uint32_t ho = local.ip.host_order();
-        std::memcpy(&a.sin_addr.s_addr, &ho, sizeof(a.sin_addr.s_addr));
+        a.sin_addr.s_addr = htonl(local.ip.host_order());
         if (::bind(s.fd_, reinterpret_cast<sockaddr*>(&a),
                    sizeof(a)) != 0) {
             int err = errno;
@@ -176,6 +175,7 @@ private:
 
 inline Accepted TcpSocket::accept() {
     sockaddr_in a{};
+    a.sin_family = AF_INET;
     socklen_t len = sizeof(a);
     int new_fd = ::accept(fd_, reinterpret_cast<sockaddr*>(&a), &len);
     if (new_fd < 0) {
@@ -184,8 +184,8 @@ inline Accepted TcpSocket::accept() {
     }
     auto ns = std::make_unique<TcpSocket>();
     ns->fd_ = new_fd;
-    std::uint32_t ho = 0;
-    std::memcpy(&ho, &a.sin_addr.s_addr, sizeof(ho));
+    // sin_addr.s_addr is in network byte order; convert to host.
+    std::uint32_t ho = ntohl(a.sin_addr.s_addr);
     IpAddr ip{ho};
     return Accepted{std::move(ns),
                     SocketAddress{ip, ntohs(a.sin_port)}};

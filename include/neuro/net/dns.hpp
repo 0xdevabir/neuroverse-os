@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <arpa/inet.h>
 #include <cstdint>
 #include <cstring>
 #include <netdb.h>
@@ -50,8 +51,8 @@ public:
             if (p->ai_family != AF_INET) continue;
             const sockaddr_in* sa =
                 reinterpret_cast<const sockaddr_in*>(p->ai_addr);
-            std::uint32_t ho = 0;
-            std::memcpy(&ho, &sa->sin_addr.s_addr, sizeof(ho));
+            // sin_addr.s_addr is in network byte order; convert to host.
+            std::uint32_t ho = ntohl(sa->sin_addr.s_addr);
             out.push_back(IpAddr{ho});
         }
         ::freeaddrinfo(res);

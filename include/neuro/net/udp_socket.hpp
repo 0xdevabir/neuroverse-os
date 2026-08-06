@@ -59,8 +59,7 @@ public:
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_port   = htons(local.port);
-        std::uint32_t ho = local.ip.host_order();
-        std::memcpy(&a.sin_addr.s_addr, &ho, sizeof(a.sin_addr.s_addr));
+        a.sin_addr.s_addr = htonl(local.ip.host_order());
         if (::bind(s.fd_, reinterpret_cast<sockaddr*>(&a),
                    sizeof(a)) != 0) {
             int err = errno;
@@ -78,8 +77,7 @@ public:
         sockaddr_in a{};
         a.sin_family = AF_INET;
         a.sin_port   = htons(peer.port);
-        std::uint32_t ho = peer.ip.host_order();
-        std::memcpy(&a.sin_addr.s_addr, &ho, sizeof(a.sin_addr.s_addr));
+        a.sin_addr.s_addr = htonl(peer.ip.host_order());
         ssize_t n = ::sendto(fd_, buf.data(), buf.size(), 0,
                              reinterpret_cast<sockaddr*>(&a), sizeof(a));
         if (n < 0) {
@@ -107,8 +105,7 @@ public:
         buf.resize(static_cast<std::size_t>(n));
 
         IpAddr ip;
-        std::uint32_t ho = 0;
-        std::memcpy(&ho, &a.sin_addr.s_addr, sizeof(ho));
+        std::uint32_t ho = ntohl(a.sin_addr.s_addr);
         ip = IpAddr{ho};
 
         return Recv{std::move(buf),

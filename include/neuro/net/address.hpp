@@ -62,14 +62,13 @@ public:
     // conditions on the host scaffold.
     static IpAddr parse(std::string_view s) {
         std::uint8_t octets[4] = {0, 0, 0, 0};
-        int idx = 0;
         std::size_t pos = 0;
         for (int i = 0; i < 4; ++i) {
             std::size_t end = s.find('.', pos);
-            if (i < 3 && end == std::string_view::npos) {
-                throw std::invalid_argument("IpAddr::parse: missing '.'");
-            }
-            std::string_view part = s.substr(pos, end - pos);
+            std::size_t part_len = (end == std::string_view::npos)
+                                       ? s.size() - pos
+                                       : end - pos;
+            std::string_view part = s.substr(pos, part_len);
             if (part.empty()) {
                 throw std::invalid_argument("IpAddr::parse: empty octet");
             }
@@ -88,11 +87,19 @@ public:
                         "IpAddr::parse: octet > 255");
                 }
             }
-            octets[idx++] = static_cast<std::uint8_t>(v);
-            if (i < 3) pos = end + 1;
-        }
-        if (pos != s.size()) {
-            throw std::invalid_argument("IpAddr::parse: trailing bytes");
+            octets[i] = static_cast<std::uint8_t>(v);
+            if (i < 3) {
+                if (end == std::string_view::npos) {
+                    throw std::invalid_argument(
+                        "IpAddr::parse: missing '.'");
+                }
+                pos = end + 1;
+            } else {
+                if (end != std::string_view::npos) {
+                    throw std::invalid_argument(
+                        "IpAddr::parse: trailing '.'");
+                }
+            }
         }
         return IpAddr{octets[0], octets[1], octets[2], octets[3]};
     }
