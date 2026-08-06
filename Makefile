@@ -92,8 +92,17 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
                                     include/neuro/mem/pool.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN); do \
+INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal
+INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
+
+$(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp \
+                                          include/neuro/sched/work_stealing.hpp \
+                                          $(NEURO_LIB_OBJS) \
+                                          $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< $(NEURO_LIB_OBJS) -o $@
+
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -101,6 +110,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
 clean:
 	rm -f $(BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean
