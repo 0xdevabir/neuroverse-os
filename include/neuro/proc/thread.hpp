@@ -25,25 +25,10 @@
 #include <thread>
 
 #include "neuro/core/kobject.hpp"
+#include "neuro/proc/process.hpp"
 #include "neuro/sec/cap_space.hpp"
 
 namespace neuro::proc {
-
-// Minimal Process stub. The real Process (with full CapabilitySpace,
-// VMASpace, initial endpoints) arrives in commit E2. Threads reference
-// it by pointer so commit E1 ships a usable Thread class on its own.
-class Process {
-public:
-    Process() = default;
-    Process(const Process&)            = delete;
-    Process& operator=(const Process&) = delete;
-    virtual ~Process() = default;
-
-    [[nodiscard]] neuro::sec::CapabilitySpace& caps() noexcept { return caps_; }
-
-private:
-    neuro::sec::CapabilitySpace caps_;
-};
 
 enum class ThreadState : std::uint8_t {
     Ready       = 0,

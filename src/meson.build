@@ -8,6 +8,7 @@ neuro_lib = static_library(
   include_directories : incdir,
   sources : [
     'proc/thread.cpp',
+    'proc/process.cpp',
   ],
   gnu_symbol_visibility : 'hidden',
 )
