@@ -57,6 +57,9 @@ private:
                 h = queue_.front();
                 queue_.pop_front();
             }
+            // Touch sched_ to keep the back-reference live; in future commits
+            // the worker will use it for stealing / global queue injection.
+            (void)sched_;
             h.resume();
         }
     }
