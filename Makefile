@@ -476,7 +476,8 @@ $(TEST_DIR)/unit/ipc/endpoint_pair_test.bin: $(TEST_DIR)/unit/ipc/endpoint_pair_
 
 # sched/work_stealing tests link the work-stealing scheduler impl.
 SCHED_TESTS := $(TEST_DIR)/unit/sched/work_stealing_test \
-               $(TEST_DIR)/unit/sched/multilevel_test
+               $(TEST_DIR)/unit/sched/multilevel_test \
+               $(TEST_DIR)/unit/sched/scheduler_test
 SCHED_TESTS_BIN := $(addsuffix .bin,$(SCHED_TESTS))
 
 $(TEST_DIR)/unit/sched/work_stealing_test.bin: $(TEST_DIR)/unit/sched/work_stealing_test.cpp \
@@ -491,6 +492,11 @@ $(TEST_DIR)/unit/sched/work_stealing_test.bin: $(TEST_DIR)/unit/sched/work_steal
 $(TEST_DIR)/unit/sched/multilevel_test.bin: $(TEST_DIR)/unit/sched/multilevel_test.cpp \
                                             include/neuro/sched/multilevel.hpp \
                                             $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/sched/scheduler_test.bin: $(TEST_DIR)/unit/sched/scheduler_test.cpp \
+                                           include/neuro/sched/scheduler.hpp \
+                                           $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
