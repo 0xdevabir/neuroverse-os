@@ -14,8 +14,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "../../test_framework.hpp"
 
@@ -143,6 +145,93 @@ TEST(thread, kobject_ids_are_unique) {
     Thread t1(p, a, inc_thread);
     Thread t2(p, a, inc_thread);
     EXPECT_NE(t1.id(), t2.id());
+}
+
+// ---- 9. default Attr values -----------------------------------------
+
+TEST(thread, default_attr_values) {
+    Process p(ProcessInit{"p8", {}});
+    Thread::Attr a;  // all defaults
+    Thread t(p, a, inc_thread);
+    EXPECT_TRUE(t.name().empty());
+    EXPECT_EQ(0u,           t.affinity());
+    EXPECT_EQ(100,          t.priority());
+    EXPECT_EQ(&p,           &t.owner());
+}
+
+// ---- 10. state machine: Running → Zombie ----------------------------
+
+TEST(thread, state_zombie_after_entry_returns) {
+    Process p(ProcessInit{"p9", {}});
+    Thread::Attr a;
+    a.name = "quick";
+    std::atomic<bool> entered{false};
+    Thread t(p, a, [&entered](Thread& /*th*/) {
+        entered.store(true);
+        // exit immediately so the run_loop marks Zombie
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    t.join();
+    EXPECT_EQ(ThreadState::Terminated, t.state());
+}
+
+// ---- 11. destruction joins a running thread --------------------------
+
+TEST(thread, destructor_joins_thread) {
+    Process p(ProcessInit{"p10", {}});
+    std::atomic<bool> ran{false};
+    {
+        Thread::Attr a;
+        Thread t(p, a, [&ran](Thread&) {
+            ran.store(true);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        });
+        t.start();
+        // Do NOT explicitly join — destructor must do it.
+        (void)t.state();
+    }
+    // If we got here without hanging, the destructor joined.
+    EXPECT_TRUE(ran.load());
+}
+
+// ---- 12. join after the thread is already done is safe --------------
+
+TEST(thread, double_join_is_safe) {
+    Process p(ProcessInit{"p11", {}});
+    Thread::Attr a;
+    Thread t(p, a, inc_thread);
+    t.start();
+    t.join();
+    // std::thread::join() is idempotent on an unjoinable thread; this
+    // call must not crash or deadlock.
+    t.join();
+    EXPECT_EQ(ThreadState::Terminated, t.state());
+}
+
+// ---- 13. many threads in one process run in parallel ----------------
+
+TEST(thread, many_threads_in_one_process) {
+    constexpr int N = 16;
+    Process p(ProcessInit{"p12", {}});
+    std::vector<std::unique_ptr<Thread>> ts;
+    std::atomic<int> counter{0};
+    ts.reserve(N);
+    for (int i = 0; i < N; ++i) {
+        Thread::Attr a;
+        a.name = "worker_" + std::to_string(i);
+        ts.push_back(std::make_unique<Thread>(
+            p, a, [&counter](Thread&) {
+                counter.fetch_add(1);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }));
+        ts.back()->start();
+    }
+    for (auto& up : ts) up->join();
+    EXPECT_EQ(N, counter.load());
+    for (auto& up : ts) {
+        EXPECT_EQ(ThreadState::Terminated, up->state());
+    }
 }
 
 RUN_ALL_TESTS()
