@@ -515,9 +515,10 @@ $(TEST_DIR)/unit/dev/driver_test.bin: $(TEST_DIR)/unit/dev/driver_test.cpp \
                                       $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_driver.o -o $@
 
-# ipc/endpoint_pair tests are header-only.
+# ipc tests are header-only.
 IPC_TESTS := $(TEST_DIR)/unit/ipc/endpoint_pair_test \
-             $(TEST_DIR)/unit/ipc/message_test
+             $(TEST_DIR)/unit/ipc/message_test \
+             $(TEST_DIR)/unit/ipc/endpoint_test
 IPC_TESTS_BIN := $(addsuffix .bin,$(IPC_TESTS))
 
 $(TEST_DIR)/unit/ipc/endpoint_pair_test.bin: $(TEST_DIR)/unit/ipc/endpoint_pair_test.cpp \
@@ -529,6 +530,12 @@ $(TEST_DIR)/unit/ipc/endpoint_pair_test.bin: $(TEST_DIR)/unit/ipc/endpoint_pair_
 $(TEST_DIR)/unit/ipc/message_test.bin: $(TEST_DIR)/unit/ipc/message_test.cpp \
                                        include/neuro/ipc/message.hpp \
                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/ipc/endpoint_test.bin: $(TEST_DIR)/unit/ipc/endpoint_test.cpp \
+                                        include/neuro/ipc/endpoint.hpp \
+                                        include/neuro/ipc/message.hpp \
+                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # sched/work_stealing tests link the work-stealing scheduler impl.
