@@ -437,7 +437,8 @@ CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
               $(TEST_DIR)/unit/core/result_test \
               $(TEST_DIR)/unit/core/kobject_test \
               $(TEST_DIR)/unit/core/capability_test \
-              $(TEST_DIR)/unit/core/version_test
+              $(TEST_DIR)/unit/core/version_test \
+              $(TEST_DIR)/unit/core/log_test
 CORE_TESTS_BIN := $(addsuffix .bin,$(CORE_TESTS))
 
 $(TEST_DIR)/unit/core/io_test.bin: $(TEST_DIR)/unit/core/io_test.cpp \
@@ -482,6 +483,11 @@ $(TEST_DIR)/unit/core/kobject_test.bin: $(TEST_DIR)/unit/core/kobject_test.cpp \
 $(TEST_DIR)/unit/core/version_test.bin: $(TEST_DIR)/unit/core/version_test.cpp \
                                              include/neuro/core/version.hpp \
                                              $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/core/log_test.bin: $(TEST_DIR)/unit/core/log_test.cpp \
+                                     include/neuro/core/log.hpp \
+                                     $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # install_test is intentionally excluded from `make test` because it
