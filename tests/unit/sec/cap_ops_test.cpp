@@ -326,4 +326,53 @@ TEST(cap_ops, move_requires_grant_right) {
     EXPECT_TRUE(src.contains(h_src));  // unchanged
 }
 
+// ---- 7. CapRight::None is a no-op narrower -----------------------
+
+TEST(cap_ops, grant_with_none_rights_preserves_capability) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::grant(src, dst, epoch, h_src, CapRight::None);
+    EXPECT_TRUE(r.ok);
+
+    auto c = dst.lookup(r.handle).value();
+    EXPECT_TRUE(c.has(kAll));
+    EXPECT_EQ(kObj, c.object_id);
+    // Source is consumed by default take=true.
+    EXPECT_FALSE(src.contains(h_src));
+}
+
+TEST(cap_ops, duplicate_with_none_rights_preserves_capability) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(src, dst, h_src, CapRight::None);
+    EXPECT_TRUE(r.ok);
+
+    auto c = dst.lookup(r.handle).value();
+    EXPECT_TRUE(c.has(kAll));
+    EXPECT_EQ(kObj, c.object_id);
+    EXPECT_TRUE(src.contains(h_src));  // duplicate keeps source
+}
+
+TEST(cap_ops, move_with_none_rights_is_pure_transfer) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::move(src, dst, epoch, h_src, CapRight::None);
+    EXPECT_TRUE(r.ok);
+    EXPECT_FALSE(src.contains(h_src));
+    EXPECT_TRUE(dst.contains(r.handle));
+    EXPECT_TRUE(dst.lookup(r.handle)->has(kAll));
+}
+
 RUN_ALL_TESTS()
