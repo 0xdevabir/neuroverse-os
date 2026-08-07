@@ -482,7 +482,8 @@ $(TEST_DIR)/unit/neuro_umbrella_test.bin: $(TEST_DIR)/unit/neuro_umbrella_test.c
 # net/channel tests are header-only (Channel<T> is templated).
 NET_TESTS := $(TEST_DIR)/unit/net/channel_test \
              $(TEST_DIR)/unit/net/address_buffer_dns_test \
-             $(TEST_DIR)/unit/net/udp_socket_test
+             $(TEST_DIR)/unit/net/udp_socket_test \
+             $(TEST_DIR)/unit/net/tcp_socket_test
 NET_TESTS_BIN := $(addsuffix .bin,$(NET_TESTS))
 
 $(TEST_DIR)/unit/net/channel_test.bin: $(TEST_DIR)/unit/net/channel_test.cpp \
@@ -499,6 +500,13 @@ $(TEST_DIR)/unit/net/address_buffer_dns_test.bin: $(TEST_DIR)/unit/net/address_b
 
 $(TEST_DIR)/unit/net/udp_socket_test.bin: $(TEST_DIR)/unit/net/udp_socket_test.cpp \
                                           include/neuro/net/udp_socket.hpp \
+                                          include/neuro/net/address.hpp \
+                                          include/neuro/net/buffer.hpp \
+                                          $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/net/tcp_socket_test.bin: $(TEST_DIR)/unit/net/tcp_socket_test.cpp \
+                                          include/neuro/net/tcp_socket.hpp \
                                           include/neuro/net/address.hpp \
                                           include/neuro/net/buffer.hpp \
                                           $(TEST_DIR)/test_framework.hpp
