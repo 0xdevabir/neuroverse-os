@@ -22,7 +22,7 @@ UMBRELLA_BIN := neuro_lib_smoke
 # Neuro static library (grows as more subsystems land .cpp impls).
 # Each .cpp compiles into its own .o; we link them all into the
 # executables. This keeps the rule list flat as we add subsystems.
-NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o neuro_memfs.o neuro_overlayfs.o neuro_driver.o neuro_scene.o neuro_audio.o neuro_fabric.o neuro_pkg.o neuro_jit.o neuro_proof.o neuro_pulse.o neuro_learn.o neuro_bridge.o neuro_boot.o
+NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o neuro_memfs.o neuro_overlayfs.o neuro_driver.o neuro_scene.o neuro_audio.o neuro_fabric.o neuro_pkg.o neuro_jit.o neuro_x86_64.o neuro_proof.o neuro_pulse.o neuro_learn.o neuro_bridge.o neuro_boot.o
 
 neuro_thread.o: src/proc/thread.cpp \
                 include/neuro/proc/thread.hpp \
@@ -79,7 +79,13 @@ neuro_pkg.o: src/pkg/store.cpp \
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 neuro_jit.o: src/jit/engine.cpp \
-             include/neuro/jit/engine.hpp
+             include/neuro/jit/engine.hpp \
+             include/neuro/jit/x86_64.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+neuro_x86_64.o: src/jit/x86_64.cpp \
+                include/neuro/jit/x86_64.hpp \
+                include/neuro/jit/engine.hpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 neuro_proof.o: src/proof/contract.cpp \
@@ -199,6 +205,30 @@ $(TEST_DIR)/unit/boot/protocol_test.bin: $(TEST_DIR)/unit/boot/protocol_test.cpp
                                           $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_boot.o -o $@
 
+# jit/x86_64 encoder tests verify byte-level encoding; they link
+# the stub encoder implementation, which is a no-op on non-x86_64
+# hosts but still provides the symbols.
+JIT_TESTS := $(TEST_DIR)/unit/jit/x86_64_test \
+             $(TEST_DIR)/unit/jit/engine_test
+JIT_TESTS_BIN := $(addsuffix .bin,$(JIT_TESTS))
+
+$(TEST_DIR)/unit/jit/x86_64_test.bin: $(TEST_DIR)/unit/jit/x86_64_test.cpp \
+                                       include/neuro/jit/x86_64.hpp \
+                                       include/neuro/jit/engine.hpp \
+                                       neuro_x86_64.o \
+                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_x86_64.o -o $@
+
+# engine_test exercises the full IR → codegen → (execute) pipeline.
+# Links the engine + x86_64 backend objects so execute() works on
+# x86_64 hosts; on other hosts the test only verifies bytes/disasm.
+$(TEST_DIR)/unit/jit/engine_test.bin: $(TEST_DIR)/unit/jit/engine_test.cpp \
+                                      include/neuro/jit/engine.hpp \
+                                      include/neuro/jit/x86_64.hpp \
+                                      neuro_x86_64.o neuro_jit.o \
+                                      $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_x86_64.o neuro_jit.o -o $@
+
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
                     $(TEST_DIR)/integration/ipc_backpressure \
@@ -249,8 +279,8 @@ $(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -258,6 +288,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) 
 clean:
 	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean

@@ -1,13 +1,25 @@
 // neuro/jit/engine.hpp
 //
-// JIT engine skeleton (NeuroJIT, README §4.13).
+// JIT engine (NeuroJIT, README §4.13).
 //
 // Per README §4.13 the JIT compiles hot DSL fragments and learned
 // kernels down to native code at runtime. The compilation pipeline
 // is: frontend IR → mid-end (opt passes) → backend (machine code).
-// On the host we expose the trait surface (Module, Function, Pass,
-// Codegen) and stub out the real codegen — the real backend lands
-// with the kernel executable-format subsystem in Phase 1.
+//
+// On the host we provide:
+//   - The Module / Function / Instr IR.
+//   - A textual disassembly backend (always works; prints IR).
+//   - An x86_64 machine-code backend that emits real bytes for a
+//     stack-based subset of the IR (Const / Add / Sub / Mul /
+//     Load / Store / Ret) and executes them via an mmap'd
+//     executable page.
+//   - Pass infrastructure that runs user-supplied optimization
+//     passes over the IR.
+//
+// The x86_64 backend is intended for the host test harness — the
+// real backend targeting the kernel's executable-format subsystem
+// lands in Phase 1. The IR shape doesn't have to change when that
+// happens.
 
 #pragma once
 
