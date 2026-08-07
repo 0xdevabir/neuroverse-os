@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -59,11 +60,21 @@ public:
     Cluster& operator=(const Cluster&)         = delete;
     virtual ~Cluster()                         = default;
 
+    // Configuration knobs. Real impl reads from a config file in
+    // Phase 1; here they're set directly. probe_interval is the
+    // period between gossip rounds; ping_timeout is the deadline
+    // after which a missing peer is marked Suspect.
+    virtual void configure(std::chrono::milliseconds probe_interval,
+                           std::chrono::milliseconds ping_timeout) = 0;
+
     // Configure the local node. id=0 means "pick one".
     virtual void local(NodeId id, std::string addr) = 0;
 
-    // Start the gossip background work.
-    virtual void start(Callbacks cb) = 0;
+    // Join the cluster with an initial peer set. The peer set
+    // is gossiped locally; the host scaffold does not actually
+    // exchange UDP packets but does honour liveness timeouts.
+    virtual void start(Callbacks cb,
+                       std::vector<Member> initial_peers = {}) = 0;
 
     // Stop the gossip background work and announce Leaving.
     virtual void stop() = 0;
@@ -75,11 +86,25 @@ public:
     // Direct probe (synchronous). Used by tests and tools.
     virtual bool ping(NodeId id) = 0;
 
+    // Manually mark a peer as Suspect / Dead / Alive. Useful for
+    // tests and operator overrides; the kernel implementation
+    // also uses ping() internally to drive the same state machine.
+    virtual void mark(NodeId id, Status s) = 0;
+
+    // Force the cluster to advance its gossip clock by `dt`.
+    // Used by tests to step through timeouts deterministically.
+    virtual void advance(std::chrono::milliseconds dt) = 0;
+
     // Helper: is this node us?
     [[nodiscard]] virtual NodeId self() const noexcept = 0;
 };
 
 // Singleton factory: one Cluster per process.
 Cluster& host_cluster();
+
+// Test-only factory: build a fresh, isolated Cluster. Tests
+// should use this instead of host_cluster() so they don't share
+// state across cases.
+std::unique_ptr<Cluster> make_test_cluster();
 
 }  // namespace neuro::fabric

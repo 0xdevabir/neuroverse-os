@@ -250,6 +250,16 @@ $(TEST_DIR)/unit/pulse/metric_test.bin: $(TEST_DIR)/unit/pulse/metric_test.cpp \
                                         $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_pulse.o -o $@
 
+# fabric/membership tests link the SWIM-style gossip impl.
+FABRIC_TESTS := $(TEST_DIR)/unit/fabric/membership_test
+FABRIC_TESTS_BIN := $(addsuffix .bin,$(FABRIC_TESTS))
+
+$(TEST_DIR)/unit/fabric/membership_test.bin: $(TEST_DIR)/unit/fabric/membership_test.cpp \
+                                             include/neuro/fabric/membership.hpp \
+                                             neuro_fabric.o \
+                                             $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_fabric.o -o $@
+
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
                     $(TEST_DIR)/integration/ipc_backpressure \
@@ -300,8 +310,8 @@ $(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -309,6 +319,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) 
 clean:
 	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean
