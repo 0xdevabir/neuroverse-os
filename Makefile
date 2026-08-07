@@ -308,7 +308,8 @@ $(TEST_DIR)/unit/audio/pipeline_test.bin: $(TEST_DIR)/unit/audio/pipeline_test.c
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # proc/thread tests link the Thread + Process implementations.
-PROC_TESTS := $(TEST_DIR)/unit/proc/thread_test
+PROC_TESTS := $(TEST_DIR)/unit/proc/thread_test \
+              $(TEST_DIR)/unit/proc/process_test
 PROC_TESTS_BIN := $(addsuffix .bin,$(PROC_TESTS))
 
 $(TEST_DIR)/unit/proc/thread_test.bin: $(TEST_DIR)/unit/proc/thread_test.cpp \
@@ -317,6 +318,14 @@ $(TEST_DIR)/unit/proc/thread_test.bin: $(TEST_DIR)/unit/proc/thread_test.cpp \
                                        neuro_thread.o neuro_process.o \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_thread.o neuro_process.o -o $@
+
+# proc/process tests link the Process implementation (the constructor
+# body lives in src/proc/process.cpp).
+$(TEST_DIR)/unit/proc/process_test.bin: $(TEST_DIR)/unit/proc/process_test.cpp \
+                                       include/neuro/proc/process.hpp \
+                                       neuro_process.o \
+                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_process.o -o $@
 
 # core/io tests are header-only.
 CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
