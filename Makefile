@@ -403,7 +403,8 @@ $(TEST_DIR)/unit/dev/driver_test.bin: $(TEST_DIR)/unit/dev/driver_test.cpp \
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_driver.o -o $@
 
 # sched/work_stealing tests link the work-stealing scheduler impl.
-SCHED_TESTS := $(TEST_DIR)/unit/sched/work_stealing_test
+SCHED_TESTS := $(TEST_DIR)/unit/sched/work_stealing_test \
+               $(TEST_DIR)/unit/sched/multilevel_test
 SCHED_TESTS_BIN := $(addsuffix .bin,$(SCHED_TESTS))
 
 $(TEST_DIR)/unit/sched/work_stealing_test.bin: $(TEST_DIR)/unit/sched/work_stealing_test.cpp \
@@ -411,6 +412,14 @@ $(TEST_DIR)/unit/sched/work_stealing_test.bin: $(TEST_DIR)/unit/sched/work_steal
                                                neuro_ws.o \
                                                $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_ws.o -o $@
+
+# multilevel_test exercises the multi-node facade. It uses
+# neuro::sched::Scheduler (the per-worker-queue variant), which is
+# fully header-only.
+$(TEST_DIR)/unit/sched/multilevel_test.bin: $(TEST_DIR)/unit/sched/multilevel_test.cpp \
+                                            include/neuro/sched/multilevel.hpp \
+                                            $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
