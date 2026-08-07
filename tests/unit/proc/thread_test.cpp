@@ -304,4 +304,57 @@ TEST(thread, wake_on_unstarted_thread_is_safe) {
     t.join();
 }
 
+// ---- 15. join_for() returns true when entry finishes in time -------
+
+TEST(thread, join_for_returns_true_for_fast_entry) {
+    // join_for returns true once done_ is set, but state remains Zombie
+    // until a subsequent join() bumps it to Terminated. Document the
+    // asymmetry.
+    Process p(ProcessInit{"p17", {}});
+    Thread::Attr a;
+    Thread t(p, a, inc_thread);
+    t.start();
+    bool ok = t.join_for(std::chrono::milliseconds{500});
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ThreadState::Zombie, t.state());
+    // Calling join() now transitions Zombie -> Terminated.
+    t.join();
+    EXPECT_EQ(ThreadState::Terminated, t.state());
+}
+
+TEST(thread, join_for_returns_false_for_blocked_entry) {
+    // Entry blocks on an external flag; join_for(short) must time out
+    // and return false without joining.
+    Process p(ProcessInit{"p18", {}});
+    Thread::Attr a;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    bool ok = t.join_for(std::chrono::milliseconds{10});
+    EXPECT_FALSE(ok);
+
+    // The thread is still running — clean up.
+    stop.store(true);
+    t.join();
+    EXPECT_EQ(ThreadState::Terminated, t.state());
+}
+
+TEST(thread, join_for_before_start_returns_true) {
+    // If start() was never called, the OS thread is not joinable and
+    // join_for must return true (no thread to wait for).
+    Process p(ProcessInit{"p19", {}});
+    Thread::Attr a;
+    Thread t(p, a, inc_thread);
+    bool ok = t.join_for(std::chrono::milliseconds{10});
+    EXPECT_TRUE(ok);
+}
+
 RUN_ALL_TESTS()
