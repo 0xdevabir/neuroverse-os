@@ -26,6 +26,7 @@
 #include <deque>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <thread>
 
 #include "neuro/ipc/message.hpp"
@@ -86,7 +87,8 @@ public:
 
         // Slow path: atomically re-check the queue, then register this
         // awaiter as a receiver. send_nowait() fills `result` and resumes
-        // `continuation` once a message arrives.
+        // `continuation` once a message arrives. If the endpoint is
+        // already closed, resume immediately with an empty Message.
         bool await_suspend(std::coroutine_handle<> h) {
             std::lock_guard lk(ep->mu_);
             if (!ep->queue_.empty()) {
@@ -94,13 +96,17 @@ public:
                 ep->queue_.pop_front();
                 return false;  // message raced with await_ready()
             }
+            if (ep->closed_) {
+                result.emplace(Message{});
+                return false;
+            }
             continuation = h;
             ep->waiters_.push_back(this);
             return true;
         }
 
         Message await_resume() {
-            return std::move(*result);
+            return result ? std::move(*result) : Message{};
         }
     };
 
@@ -120,9 +126,11 @@ public:
 
     // Block the calling thread until a message is available. Polls
     // every `poll_interval` until one arrives. Returns the message.
+    // Throws std::runtime_error if the endpoint has been closed.
     Message recv_blocking(std::chrono::milliseconds poll_interval =
                               std::chrono::milliseconds{1}) {
         for (;;) {
+            if (closed_) throw std::runtime_error("neuro::ipc::Endpoint: closed");
             if (auto m = try_recv()) return std::move(*m);
             std::this_thread::sleep_for(poll_interval);
         }
@@ -131,6 +139,29 @@ public:
     [[nodiscard]] std::size_t size() const {
         std::lock_guard lk(mu_);
         return queue_.size();
+    }
+
+    // ---- Lifecycle ---------------------------------------------------
+
+    // close() puts the endpoint into a terminal state: every subsequent
+    // try_recv returns nullopt, recv_blocking throws, recv_awaiter
+    // resumes with an empty Message. Existing queued messages are NOT
+    // drained; the receiver can still observe them via try_recv until
+    // the queue empties. close() is idempotent.
+    void close() noexcept {
+        std::lock_guard lk(mu_);
+        closed_ = true;
+        // Wake any parked recv_awaiter so it can observe the closed state.
+        for (auto* w : waiters_) {
+            w->result.reset();
+            if (w->continuation) w->continuation.resume();
+        }
+        waiters_.clear();
+    }
+
+    [[nodiscard]] bool closed() const noexcept {
+        std::lock_guard lk(mu_);
+        return closed_;
     }
 
     // ---- Internal -----------------------------------------------------
@@ -145,9 +176,11 @@ public:
                 waiters_.pop_front();
                 resume = waiter->continuation;
                 waiter->result.emplace(std::move(m));
-            } else {
+            } else if (!closed_) {
                 queue_.push_back(std::move(m));
             }
+            // else: silently drop — endpoint is closed and no one is
+            // parked. The caller (host tests) typically doesn't care.
         }
         if (resume) resume.resume();
     }
@@ -156,6 +189,7 @@ private:
     mutable std::mutex                mu_;
     std::deque<Message>               queue_;
     std::deque<recv_awaiter*>         waiters_;
+    bool                              closed_ = false;
 };
 
 }  // namespace neuro::ipc

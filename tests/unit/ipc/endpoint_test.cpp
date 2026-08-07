@@ -447,4 +447,45 @@ TEST(ipc_endpoint, send_coroutine_and_recv_awaiter_interleave) {
     EXPECT_EQ(4950, sum_seen.load());  // sum 0..99 == 4950
 }
 
+TEST(ipc_endpoint, close_is_idempotent_and_reports_state) {
+    Endpoint ep;
+    EXPECT_FALSE(ep.closed());
+    ep.send_nowait(Message(Tag(1, 1), bytes({0xAA})));
+    ep.close();
+    ep.close();
+    EXPECT_TRUE(ep.closed());
+
+    // close does not invalidate already queued messages; they remain
+    // available for synchronous draining.
+    auto m = ep.try_recv();
+    EXPECT_TRUE(m.has_value());
+    EXPECT_TRUE(m->tag == Tag(1, 1));
+    EXPECT_FALSE(ep.try_recv().has_value());
+
+    // Sends after close are discarded.
+    ep.send_nowait(Message(Tag(2, 2), bytes({0xBB})));
+    EXPECT_FALSE(ep.try_recv().has_value());
+}
+
+TEST(ipc_endpoint, recv_blocking_throws_after_close) {
+    Endpoint ep;
+    ep.close();
+    bool threw = false;
+    try {
+        (void)ep.recv_blocking(std::chrono::milliseconds{1});
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    EXPECT_TRUE(threw);
+}
+
+TEST(ipc_endpoint, recv_awaiter_fast_path_after_close_returns_empty_message) {
+    Endpoint ep;
+    ep.close();
+    std::atomic<int> payload_size{-1};
+    auto task = co_recv(ep, &payload_size);
+    task.h.resume();
+    EXPECT_EQ(0, payload_size.load());
+}
+
 RUN_ALL_TESTS()
