@@ -217,4 +217,84 @@ TEST(cap_ops, grant_with_superset_attenuation_rejected) {
     EXPECT_FALSE(r.ok);
 }
 
+// ---- 5. duplicate (no Grant right needed) ------------------------
+
+TEST(cap_ops, duplicate_within_same_space_preserves_handle) {
+    CapabilitySpace space;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(space, epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(space, space, h_src);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(r.handle != h_src);    // distinct handle
+    EXPECT_TRUE(r.handle != neuro::sec::kInvalidHandle);
+    EXPECT_EQ(static_cast<std::size_t>(2), space.size());
+
+    // Both copies point at the same object.
+    EXPECT_EQ(kObj, space.lookup(r.handle)->object_id);
+}
+
+TEST(cap_ops, duplicate_across_spaces_does_not_require_grant_right) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    // Source cap is Read-only — duplicate must still succeed.
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(src, dst, h_src);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(src.lookup(h_src).has_value());  // unchanged
+    EXPECT_TRUE(dst.lookup(r.handle).has_value());
+}
+
+TEST(cap_ops, duplicate_with_none_rights_is_identity) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(src, dst, h_src, CapRight::None);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(dst.lookup(r.handle)->has(kAll));
+}
+
+TEST(cap_ops, duplicate_with_subset_narrows) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(src, dst, h_src,
+                                     CapRight::Read | CapRight::Write);
+    EXPECT_TRUE(r.ok);
+    auto c = dst.lookup(r.handle).value();
+    EXPECT_TRUE(c.has(CapRight::Read));
+    EXPECT_TRUE(c.has(CapRight::Write));
+    EXPECT_FALSE(c.has(CapRight::Grant));
+}
+
+TEST(cap_ops, duplicate_with_superset_rejected) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    const auto r = CapOps::duplicate(src, dst, h_src,
+                                     CapRight::Read | CapRight::Grant);
+    EXPECT_FALSE(r.ok);
+    EXPECT_EQ(static_cast<std::size_t>(0), dst.size());
+}
+
+TEST(cap_ops, duplicate_unknown_handle_fails) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    const auto r = CapOps::duplicate(src, dst, 0xDEADBEEF, CapRight::None);
+    EXPECT_FALSE(r.ok);
+}
+
 RUN_ALL_TESTS()
