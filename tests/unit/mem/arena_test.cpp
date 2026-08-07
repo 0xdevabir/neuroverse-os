@@ -113,6 +113,24 @@ TEST(arena, pointer_offset_within_arena_stable_after_reset) {
     EXPECT_TRUE(off_p2 <  128u);
 }
 
+TEST(arena, pointer_stability_across_full_reset) {
+    // Z4.2 follow-up: after reset() (full release), the previously
+    // captured pointer p1 still lives within the arena's address range,
+    // even though the memory is logically freed. The pointer arithmetic
+    // remains valid.
+    Arena a(1024);
+    auto* p1 = a.allocate(200, 16);
+    auto off_p1 = reinterpret_cast<std::uintptr_t>(p1) -
+                  reinterpret_cast<std::uintptr_t>(a.base());
+    a.reset();
+    EXPECT_EQ(a.used(), 0u);
+    auto* p1_after = reinterpret_cast<std::byte*>(
+        reinterpret_cast<std::uintptr_t>(a.base()) + off_p1);
+    EXPECT_EQ(p1, p1_after);  // same address; byte is now reusable
+    auto* p2 = a.allocate(200, 16);
+    EXPECT_EQ(p1, p2);
+}
+
 TEST(arena, make_T_constructs_in_place) {
     struct Point { int x; int y; Point(int a, int b) : x(a), y(b) {} };
     Arena a(1024);
