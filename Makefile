@@ -328,6 +328,15 @@ $(TEST_DIR)/unit/core/span_test.bin: $(TEST_DIR)/unit/core/span_test.cpp \
                                     $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
+# net/channel tests are header-only (Channel<T> is templated).
+NET_TESTS := $(TEST_DIR)/unit/net/channel_test
+NET_TESTS_BIN := $(addsuffix .bin,$(NET_TESTS))
+
+$(TEST_DIR)/unit/net/channel_test.bin: $(TEST_DIR)/unit/net/channel_test.cpp \
+                                        include/neuro/net/channel.hpp \
+                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
 # proof/contract tests are header-only.
 PROOF_TESTS := $(TEST_DIR)/unit/proof/contract_test
 PROOF_TESTS_BIN := $(addsuffix .bin,$(PROOF_TESTS))
@@ -407,8 +416,8 @@ $(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -416,6 +425,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) 
 clean:
 	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean
