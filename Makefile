@@ -292,7 +292,8 @@ $(TEST_DIR)/unit/fabric/membership_test.bin: $(TEST_DIR)/unit/fabric/membership_
 
 # bridge/ffi tests use the symbol-table impl. Need neuro_bridge.o
 # for the host_bridge() singleton.
-BRIDGE_TESTS := $(TEST_DIR)/unit/bridge/ffi_test
+BRIDGE_TESTS := $(TEST_DIR)/unit/bridge/ffi_test \
+                $(TEST_DIR)/unit/bridge/bridge_test
 BRIDGE_TESTS_BIN := $(addsuffix .bin,$(BRIDGE_TESTS))
 
 $(TEST_DIR)/unit/bridge/ffi_test.bin: $(TEST_DIR)/unit/bridge/ffi_test.cpp \
@@ -300,6 +301,11 @@ $(TEST_DIR)/unit/bridge/ffi_test.bin: $(TEST_DIR)/unit/bridge/ffi_test.cpp \
                                       neuro_bridge.o \
                                       $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_bridge.o -o $@
+
+$(TEST_DIR)/unit/bridge/bridge_test.bin: $(TEST_DIR)/unit/bridge/bridge_test.cpp \
+                                        include/neuro/bridge/ffi.hpp \
+                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # ui/scene tests link the flattener impl.
 UI_TESTS := $(TEST_DIR)/unit/ui/scene_test
