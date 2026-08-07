@@ -139,4 +139,82 @@ TEST(cap_ops, fresh_mint_after_revoke_resolves) {
                      .has_value());
 }
 
+// ---- 4. grant cross-space ----------------------------------------
+
+TEST(cap_ops, grant_moves_capability_to_destination_space) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        src_epoch;
+    const auto h_src =
+        CapOps::mint(src, src_epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::grant(src, dst, src_epoch, h_src);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(r.handle != neuro::sec::kInvalidHandle);
+
+    // Destination has the cap; source has lost it.
+    EXPECT_TRUE(dst.lookup(r.handle).has_value());
+    EXPECT_FALSE(src.lookup(h_src).has_value());
+}
+
+TEST(cap_ops, grant_take_false_duplicates_in_destination) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        src_epoch;
+    const auto h_src =
+        CapOps::mint(src, src_epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::grant(src, dst, src_epoch, h_src,
+                                 CapRight::None, /*take=*/false);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(src.lookup(h_src).has_value());       // still here
+    EXPECT_TRUE(dst.lookup(r.handle).has_value());    // also here
+}
+
+TEST(cap_ops, grant_requires_grant_right_on_source) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        src_epoch;
+    // Source cap has no Grant right — grant must fail.
+    const auto h_src =
+        CapOps::mint(src, src_epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    const auto r = CapOps::grant(src, dst, src_epoch, h_src);
+    EXPECT_FALSE(r.ok);
+    // Source space is untouched on failure.
+    EXPECT_TRUE(src.lookup(h_src).has_value());
+    EXPECT_EQ(static_cast<std::size_t>(0), dst.size());
+}
+
+TEST(cap_ops, grant_with_attenuation_narrows_rights) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        src_epoch;
+    const auto h_src =
+        CapOps::mint(src, src_epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::grant(src, dst, src_epoch, h_src,
+                                 CapRight::Read | CapRight::Write);
+    EXPECT_TRUE(r.ok);
+
+    auto dst_cap = dst.lookup(r.handle).value();
+    EXPECT_TRUE(dst_cap.has(CapRight::Read));
+    EXPECT_TRUE(dst_cap.has(CapRight::Write));
+    EXPECT_FALSE(dst_cap.has(CapRight::Grant));
+    EXPECT_FALSE(dst_cap.has(CapRight::Signal));
+}
+
+TEST(cap_ops, grant_with_superset_attenuation_rejected) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        src_epoch;
+    const auto h_src =
+        CapOps::mint(src, src_epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    // Grant right is wider than the source — must fail.
+    const auto r = CapOps::grant(src, dst, src_epoch, h_src,
+                                 CapRight::Read | CapRight::Grant);
+    EXPECT_FALSE(r.ok);
+}
+
 RUN_ALL_TESTS()
