@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+
 #include "../../test_framework.hpp"
 
 using neuro::core::Endpoint;
@@ -161,6 +162,31 @@ TEST(process, thread_at_out_of_range_returns_null) {
     Process p(ProcessInit{"tp3", {}});
     EXPECT_TRUE(p.thread_at(0) == nullptr);
     EXPECT_TRUE(p.thread_at(99) == nullptr);
+}
+
+TEST(process, thread_indices_are_stable_and_distinct) {
+    // Each add_thread() returns a unique index; subsequent lookups
+    // via thread_at() return the same pointer that was registered.
+    using neuro::proc::Thread;
+    Process p(ProcessInit{"tp4", {}});
+    constexpr int N = 8;
+    std::vector<std::unique_ptr<Thread>> ts;
+    ts.reserve(N);
+    std::vector<std::size_t> indices;
+    for (int i = 0; i < N; ++i) {
+        Thread::Attr a;
+        a.name = "stable_" + std::to_string(i);
+        ts.push_back(std::make_unique<Thread>(p, a, [](Thread&) {}));
+        indices.push_back(p.add_thread(ts.back().get()));
+    }
+    std::set<std::size_t> unique(indices.begin(), indices.end());
+    EXPECT_EQ(static_cast<std::size_t>(N), unique.size());
+    EXPECT_EQ(static_cast<std::size_t>(N), p.thread_count());
+
+    // Indices remain stable across the lifetime of the threads.
+    for (int i = 0; i < N; ++i) {
+        EXPECT_EQ(ts[i].get(), p.thread_at(indices[i]));
+    }
 }
 
 RUN_ALL_TESTS()
