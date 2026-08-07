@@ -22,7 +22,7 @@ UMBRELLA_BIN := neuro_lib_smoke
 # Neuro static library (grows as more subsystems land .cpp impls).
 # Each .cpp compiles into its own .o; we link them all into the
 # executables. This keeps the rule list flat as we add subsystems.
-NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o neuro_memfs.o neuro_overlayfs.o neuro_driver.o neuro_scene.o neuro_audio.o neuro_fabric.o neuro_pkg.o neuro_jit.o neuro_x86_64.o neuro_proof.o neuro_pulse.o neuro_learn.o neuro_bridge.o neuro_boot.o
+NEURO_LIB_OBJS := neuro_thread.o neuro_process.o neuro_ws.o neuro_memfs.o neuro_ramfs.o neuro_overlayfs.o neuro_driver.o neuro_scene.o neuro_audio.o neuro_fabric.o neuro_pkg.o neuro_jit.o neuro_x86_64.o neuro_proof.o neuro_pulse.o neuro_learn.o neuro_bridge.o neuro_boot.o
 
 neuro_thread.o: src/proc/thread.cpp \
                 include/neuro/proc/thread.hpp \
@@ -49,6 +49,13 @@ neuro_memfs.o: src/fs/memfs.cpp \
                include/neuro/fs/vfs.hpp \
                include/neuro/fs/vnode.hpp \
                include/neuro/core/result.hpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+neuro_ramfs.o: src/fs/ramfs.cpp \
+              include/neuro/fs/ramfs.hpp \
+              include/neuro/fs/vfs.hpp \
+              include/neuro/fs/vnode.hpp \
+              include/neuro/core/result.hpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 neuro_overlayfs.o: src/fs/overlayfs.cpp \
@@ -342,6 +349,7 @@ $(TEST_DIR)/unit/audio/pipeline_test.bin: $(TEST_DIR)/unit/audio/pipeline_test.c
 FS_TESTS := $(TEST_DIR)/unit/fs/vnode_test \
             $(TEST_DIR)/unit/fs/vfs_test \
             $(TEST_DIR)/unit/fs/memfs_test \
+            $(TEST_DIR)/unit/fs/ramfs_test \
             $(TEST_DIR)/unit/fs/overlayfs_test
 FS_TESTS_BIN := $(addsuffix .bin,$(FS_TESTS))
 
@@ -367,6 +375,15 @@ $(TEST_DIR)/unit/fs/memfs_test.bin: $(TEST_DIR)/unit/fs/memfs_test.cpp \
                                     neuro_memfs.o \
                                     $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o -o $@
+
+$(TEST_DIR)/unit/fs/ramfs_test.bin: $(TEST_DIR)/unit/fs/ramfs_test.cpp \
+                                   include/neuro/fs/ramfs.hpp \
+                                   include/neuro/fs/vfs.hpp \
+                                   include/neuro/fs/vnode.hpp \
+                                   include/neuro/core/result.hpp \
+                                   neuro_ramfs.o \
+                                   $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_ramfs.o -o $@
 
 $(TEST_DIR)/unit/fs/overlayfs_test.bin: $(TEST_DIR)/unit/fs/overlayfs_test.cpp \
                                         include/neuro/fs/overlayfs.hpp \
