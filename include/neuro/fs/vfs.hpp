@@ -89,6 +89,22 @@ public:
         return core::Unit{};
     }
 
+    // Z6.7: append `bytes` to the end of the file at `path`. Creates
+    // the file if it doesn't exist. Writes always land at the current
+    // EOF — the offset is derived from stat()->size at call time.
+    core::Result<core::Unit>
+    append(std::string_view path, std::span<const std::byte> bytes) {
+        auto fh = open(path, OpenFlags::Write | OpenFlags::Create);
+        if (!fh) return std::unexpected(fh.error());
+        auto v = lookup(path);
+        if (!v) return std::unexpected(v.error());
+        auto s = (*v)->stat();
+        if (!s) return std::unexpected(s.error());
+        auto r = (*v)->write(s->size, bytes);
+        if (!r) return std::unexpected(r.error());
+        return core::Unit{};
+    }
+
     // Next available VNodeId. Used by concrete FSes to mint
     // fresh ids.
     [[nodiscard]] VNodeId next_id() noexcept {

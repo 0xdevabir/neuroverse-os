@@ -232,4 +232,68 @@ TEST(memfs, clear_does_not_reuse_vnode_ids) {
     EXPECT_TRUE(second->vnode.id > first_handle.id);
 }
 
+// ---- Z6.7: append() semantics ----------------------------------------
+
+TEST(memfs, append_to_existing_file_concatenates_at_eof) {
+    MemFS fs;
+    EXPECT_TRUE(fs.write_all("/file", bytes("abc")).has_value());
+    EXPECT_TRUE(fs.append("/file", bytes("def")).has_value());
+
+    auto read = fs.read_all("/file");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(std::string("abcdef"), text(*read));
+}
+
+TEST(memfs, append_creates_missing_file) {
+    MemFS fs;
+    EXPECT_TRUE(fs.append("/new", bytes("hello")).has_value());
+
+    auto read = fs.read_all("/new");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(std::string("hello"), text(*read));
+}
+
+TEST(memfs, append_multiple_times_accumulates) {
+    MemFS fs;
+    EXPECT_TRUE(fs.append("/log", bytes("one\n")).has_value());
+    EXPECT_TRUE(fs.append("/log", bytes("two\n")).has_value());
+    EXPECT_TRUE(fs.append("/log", bytes("three\n")).has_value());
+
+    auto read = fs.read_all("/log");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(std::string("one\ntwo\nthree\n"), text(*read));
+}
+
+TEST(memfs, append_after_write_all_starts_from_existing_size) {
+    MemFS fs;
+    EXPECT_TRUE(fs.write_all("/data", bytes("X")).has_value());
+    EXPECT_TRUE(fs.append("/data", bytes("YZ")).has_value());
+
+    auto read = fs.read_all("/data");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(std::string("XYZ"), text(*read));
+}
+
+TEST(memfs, append_empty_bytes_is_noop_on_existing) {
+    MemFS fs;
+    EXPECT_TRUE(fs.write_all("/file", bytes("kept")).has_value());
+    EXPECT_TRUE(fs.append("/file", bytes("")).has_value());
+
+    auto read = fs.read_all("/file");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(std::string("kept"), text(*read));
+}
+
+TEST(memfs, append_advances_vnode_size) {
+    MemFS fs;
+    EXPECT_TRUE(fs.write_all("/file", bytes("abc")).has_value());
+    EXPECT_TRUE(fs.append("/file", bytes("def")).has_value());
+
+    auto node = fs.lookup("/file");
+    EXPECT_TRUE(node.has_value());
+    auto stat = (*node)->stat();
+    EXPECT_TRUE(stat.has_value());
+    EXPECT_EQ(static_cast<std::uint64_t>(6), stat->size);
+}
+
 RUN_ALL_TESTS()
