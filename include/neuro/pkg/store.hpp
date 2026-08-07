@@ -1,14 +1,14 @@
 // neuro/pkg/store.hpp
 //
-// Content-addressed store skeleton (NeuroPkg, README §4.12).
+// Content-addressed store (NeuroPkg, README §4.12).
 //
 // Per README §4.12 the package manager is content-addressed:
 // every artifact (source tree, binary blob, capability bundle) is
 // keyed by the SHA3-512 of its canonical bytes. On the host we
-// expose the trait surface (hash, put, get, has) and stub the
-// actual SHA3-512 implementation with std::hash-based stand-ins.
-// The real SHA3-512 + Merkle tree lands with the kernel crypto
-// subsystem in Phase 1.
+// back the Store with an in-memory map and use the real FIPS-202
+// SHA3-512 hasher (see neuro/pkg/sha3.hpp) for content addressing.
+// The on-disk Merkle tree + manifest verifier land with the
+// kernel crypto subsystem in Phase 1.
 
 #pragma once
 
@@ -24,7 +24,7 @@
 
 namespace neuro::pkg {
 
-// SHA3-512 digest (64 bytes). Real algorithm in Phase 1.
+// SHA3-512 digest (64 bytes).
 using Digest = std::array<std::uint8_t, 64>;
 
 inline std::string to_hex(const Digest& d) {
@@ -66,8 +66,7 @@ public:
     Store& operator=(const Store&) = delete;
     virtual ~Store()         = default;
 
-    // Hash arbitrary bytes. The host stub uses a fast non-cryptographic
-    // hash — real SHA3-512 lands in Phase 1.
+    // Hash arbitrary bytes with FIPS-202 SHA3-512.
     [[nodiscard]] virtual Digest
         hash(std::span<const std::byte> bytes) const noexcept = 0;
 

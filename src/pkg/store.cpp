@@ -2,12 +2,13 @@
 //
 // Content-addressed store — host scaffold.
 //
-// On the host we back the Store with an unordered_map keyed by
-// Digest. The hash() function uses std::hash on the byte stream as
-// a stand-in for SHA3-512 (real algorithm lands with the kernel
-// crypto subsystem in Phase 1).
+// On the host we back the Store with an std::map keyed by Digest
+// and use the real FIPS-202 SHA3-512 hasher (neuro/pkg/sha3.hpp)
+// for content addressing. The on-disk Merkle tree + manifest
+// verifier land with the kernel crypto subsystem in Phase 1.
 
 #include "neuro/pkg/store.hpp"
+#include "neuro/pkg/sha3.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -23,20 +24,7 @@ class HostStore : public Store {
 public:
     [[nodiscard]] Digest
         hash(std::span<const std::byte> bytes) const noexcept override {
-        Digest d{};
-        // FNV-1a + length-mix stand-in for SHA3-512.
-        std::uint64_t h = 1469598103934665603ULL;
-        for (std::byte b : bytes) {
-            h ^= static_cast<std::uint64_t>(b);
-            h *= 1099511628211ULL;
-        }
-        // Splat the 64-bit hash across the 64-byte Digest so each
-        // digest is non-trivially unique. Real SHA3-512 fills all
-        // 64 bytes with cryptographic strength in Phase 1.
-        for (std::size_t i = 0; i < d.size(); ++i) {
-            d[i] = static_cast<std::uint8_t>((h >> ((i % 8) * 8)) ^ (i * 31));
-        }
-        return d;
+        return sha3::sha3_512(bytes);
     }
 
     Digest put(std::span<const std::byte> bytes) override {
