@@ -72,6 +72,42 @@ TEST(endpoint_pair, send_queue_size_grows_under_load) {
     EXPECT_EQ(0u, p.b_unread());
 }
 
+TEST(endpoint_pair, send_queue_size_saturates_at_capacity) {
+    // Z3.5: under continued backpressure (no receiver), send_queue_size
+    // stops growing once capacity is reached; send_nowait fails.
+    EndpointPair p(4);
+    auto a = p.a();
+    for (int i = 0; i < 4; ++i) a.send_nowait(make_msg(0, static_cast<std::uint16_t>(i)));
+    EXPECT_EQ(4u, a.send_queue_size());
+    EXPECT_TRUE(p.a_send_full());
+    EXPECT_FALSE(a.send_nowait(make_msg(0, 99)));
+    EXPECT_EQ(4u, a.send_queue_size());  // unchanged on failure
+}
+
+TEST(endpoint_pair, send_queue_size_interleaved_with_drain) {
+    // Z3.5: as the receiver drains, send_queue_size fluctuates; never
+    // exceeds capacity.
+    EndpointPair p(3);
+    auto a = p.a();
+    auto b = p.b();
+
+    a.send_nowait(make_msg(0, 0));
+    EXPECT_EQ(1u, a.send_queue_size());
+    a.send_nowait(make_msg(0, 1));
+    EXPECT_EQ(2u, a.send_queue_size());
+
+    (void)b.try_recv();
+    EXPECT_EQ(1u, a.send_queue_size());
+
+    a.send_nowait(make_msg(0, 2));
+    EXPECT_EQ(2u, a.send_queue_size());
+    a.send_nowait(make_msg(0, 3));
+    EXPECT_EQ(3u, a.send_queue_size());
+    EXPECT_TRUE(p.a_send_full());
+    EXPECT_FALSE(a.send_nowait(make_msg(0, 4)));
+    EXPECT_EQ(3u, a.send_queue_size());
+}
+
 TEST(endpoint_pair, try_send_for_unblocks_on_close) {
     // Z3.4: a parked try_send_for must return false promptly when
     // the queue is closed from another thread.
