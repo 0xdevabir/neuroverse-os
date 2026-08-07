@@ -155,7 +155,8 @@ $(SECURITY_TESTS_BIN): $(SECURITY_TESTS).cpp \
 
 MEM_TESTS := $(TEST_DIR)/unit/mem/arena_test \
              $(TEST_DIR)/unit/mem/pool_test \
-             $(TEST_DIR)/unit/mem/vma_tree_test
+             $(TEST_DIR)/unit/mem/vma_tree_test \
+             $(TEST_DIR)/unit/mem/page_table_test
 MEM_TESTS_BIN := $(addsuffix .bin,$(MEM_TESTS))
 
 $(MEM_TESTS_BIN): $(TEST_DIR)/test_framework.hpp
@@ -170,6 +171,10 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
 
 $(TEST_DIR)/unit/mem/vma_tree_test.bin: $(TEST_DIR)/unit/mem/vma_tree_test.cpp \
                                         include/neuro/mem/vma_tree.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/mem/page_table_test.bin: $(TEST_DIR)/unit/mem/page_table_test.cpp \
+                                          include/neuro/mem/page_table.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test \
