@@ -144,7 +144,8 @@ TEST_INCLUDES := $(INCLUDES) -I.
 
 SECURITY_TESTS := $(TEST_DIR)/unit/sec/capability_test \
                   $(TEST_DIR)/unit/sec/cap_space_test \
-                  $(TEST_DIR)/unit/sec/epoch_test
+                  $(TEST_DIR)/unit/sec/epoch_test \
+                  $(TEST_DIR)/unit/sec/cap_ops_test
 SECURITY_TESTS_BIN := $(addsuffix .bin,$(SECURITY_TESTS))
 
 $(TEST_DIR)/unit/sec/capability_test.bin: $(TEST_DIR)/unit/sec/capability_test.cpp \
@@ -164,6 +165,16 @@ $(TEST_DIR)/unit/sec/cap_space_test.bin: $(TEST_DIR)/unit/sec/cap_space_test.cpp
 $(TEST_DIR)/unit/sec/epoch_test.bin: $(TEST_DIR)/unit/sec/epoch_test.cpp \
                                       include/neuro/sec/epoch.hpp \
                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/sec/cap_ops_test.bin: $(TEST_DIR)/unit/sec/cap_ops_test.cpp \
+                                       include/neuro/sec/cap_ops.hpp \
+                                       include/neuro/sec/cap_space.hpp \
+                                       include/neuro/sec/epoch.hpp \
+                                       include/neuro/core/capability.hpp \
+                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 MEM_TESTS := $(TEST_DIR)/unit/mem/arena_test \
