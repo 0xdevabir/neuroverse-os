@@ -234,4 +234,74 @@ TEST(thread, many_threads_in_one_process) {
     }
 }
 
+// ---- 14. wake() semantics ------------------------------------------
+
+TEST(thread, wake_on_running_thread_is_noop) {
+    // wake() only transitions Waiting -> Ready; calling it on a Running
+    // thread must not crash and must not change the state.
+    Process p(ProcessInit{"p13", {}});
+    Thread::Attr a;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    EXPECT_EQ(ThreadState::Running, t.state());
+    t.wake();    // Running -> Running, no-op
+    EXPECT_EQ(ThreadState::Running, t.state());
+    stop.store(true);
+    t.join();
+}
+
+TEST(thread, wake_is_idempotent) {
+    // Many wake() calls on the same thread must not deadlock or crash.
+    Process p(ProcessInit{"p14", {}});
+    Thread::Attr a;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    for (int i = 0; i < 100; ++i) t.wake();
+    EXPECT_EQ(ThreadState::Running, t.state());
+    stop.store(true);
+    t.join();
+}
+
+TEST(thread, wake_on_terminated_thread_is_safe) {
+    // Calling wake() on a thread that has already exited must not crash
+    // or change the state. The underlying cv_.notify_one() on a not-yet-
+    // destroyed cv is well-defined.
+    Process p(ProcessInit{"p15", {}});
+    Thread::Attr a;
+    Thread t(p, a, inc_thread);
+    t.start();
+    t.join();
+    t.wake();
+    EXPECT_EQ(ThreadState::Terminated, t.state());
+}
+
+TEST(thread, wake_on_unstarted_thread_is_safe) {
+    // wake() must not crash even before start(). The state is Ready
+    // and wake() is a no-op.
+    Process p(ProcessInit{"p16", {}});
+    Thread::Attr a;
+    Thread t(p, a, inc_thread);
+    EXPECT_EQ(ThreadState::Ready, t.state());
+    t.wake();
+    EXPECT_EQ(ThreadState::Ready, t.state());
+    t.start();
+    t.join();
+}
+
 RUN_ALL_TESTS()
