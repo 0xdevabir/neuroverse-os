@@ -52,6 +52,84 @@ TEST(endpoint_pair, default_capacity_is_64) {
     EXPECT_EQ(EndpointPair::kDefaultCapacity, p.b().send_capacity());
 }
 
+TEST(endpoint_pair, send_queue_size_grows_under_load) {
+    // Z3.5: send_queue_size reflects queued messages and drains to 0
+    // as the receiver pulls them out.
+    EndpointPair p(16);
+    auto a = p.a();
+    auto b = p.b();
+
+    EXPECT_EQ(0u, a.send_queue_size());
+    for (int i = 0; i < 5; ++i) a.send_nowait(make_msg(0, static_cast<std::uint16_t>(i)));
+    EXPECT_EQ(5u, a.send_queue_size());
+
+    // b() reads from the forward queue, draining the send side.
+    for (int i = 0; i < 5; ++i) {
+        auto m = b.try_recv();
+        EXPECT_TRUE(m.has_value());
+    }
+    EXPECT_EQ(0u, a.send_queue_size());
+    EXPECT_EQ(0u, p.b_unread());
+}
+
+TEST(endpoint_pair, try_send_for_unblocks_on_close) {
+    // Z3.4: a parked try_send_for must return false promptly when
+    // the queue is closed from another thread.
+    EndpointPair p(1);
+    auto a = p.a();
+    a.send_nowait(make_msg(0, 0));   // fill capacity
+    EXPECT_TRUE(p.a_send_full());
+
+    std::atomic<bool> returned{false};
+    std::atomic<bool> closed{false};
+
+    std::thread sender([&] {
+        // try_send_for should eventually return false (closed).
+        bool ok = a.try_send_for(make_msg(0, 1),
+                                 std::chrono::seconds{2});
+        returned.store(true);
+        EXPECT_FALSE(ok);
+    });
+
+    // Give sender time to park on cv_not_full.
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    EXPECT_FALSE(returned.load());
+
+    // Manually close the forward queue by destroying a clone of the
+    // EndpointPair. EndpointPair dtor calls close() on both queues,
+    // which notifies the parked sender.
+    {
+        EndpointPair p2(std::move(p));  // take ownership, will close on dtor
+        closed.store(true);
+    }
+    sender.join();
+    EXPECT_TRUE(closed.load());
+    EXPECT_TRUE(returned.load());
+}
+
+TEST(endpoint_pair, try_recv_for_unblocks_on_close) {
+    // Z3.4 (recv side): a parked try_recv_for returns nullopt when
+    // the queue is closed from another thread.
+    EndpointPair p;
+    auto b = p.b();
+    std::atomic<bool> returned{false};
+
+    std::thread receiver([&] {
+        auto m = b.try_recv_for(std::chrono::seconds{2});
+        returned.store(true);
+        EXPECT_FALSE(m.has_value());
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    EXPECT_FALSE(returned.load());
+
+    {
+        EndpointPair p2(std::move(p));
+    }
+    receiver.join();
+    EXPECT_TRUE(returned.load());
+}
+
 TEST(endpoint_pair, explicit_capacity) {
     EndpointPair p(8);
     EXPECT_EQ(static_cast<std::size_t>(8), p.a().send_capacity());
