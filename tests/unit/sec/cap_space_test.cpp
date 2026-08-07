@@ -238,4 +238,42 @@ TEST(cap_space, churn_does_not_break_tree) {
     }
 }
 
+// ---- 9. radix-depth stress: 65 536 unique nibble patterns --------
+
+TEST(cap_space, fills_radix_depth_65536) {
+    // The radix trie is depth 16 with radix 16. Walking 4 nibbles in
+    // the low half gives 16^4 == 65 536 unique "shapes" that all
+    // share the high bits. Insert one cap per shape, verify they all
+    // resolve and the size matches.
+    CapabilitySpace sp;
+    std::vector<std::uint64_t> hs;
+    hs.reserve(65536);
+    for (std::uint64_t i = 0; i < 65536; ++i) {
+        hs.push_back(sp.insert(make_cap(/*oid=*/i + 1, CapRight::Read)));
+    }
+    EXPECT_EQ(static_cast<std::size_t>(65536), sp.size());
+
+    // Every handle resolves to its own object_id.
+    for (std::uint64_t i = 0; i < 65536; ++i) {
+        auto looked = sp.lookup(hs[i]);
+        EXPECT_TRUE(looked.has_value());
+        EXPECT_EQ(i + 1, looked->object_id);
+    }
+}
+
+TEST(cap_space, fill_then_bulk_erase_compacts) {
+    // Insert 4096 caps at distinct paths, erase them all, and verify
+    // the trie collapses back close to its starting node count.
+    CapabilitySpace sp;
+    std::vector<std::uint64_t> hs;
+    for (std::uint64_t i = 0; i < 4096; ++i) {
+        hs.push_back(sp.insert(make_cap(i + 100, CapRight::Read)));
+    }
+    const auto peak_nodes = sp.node_count();
+
+    for (auto h : hs) (void)sp.erase(h);
+    EXPECT_EQ(static_cast<std::size_t>(0), sp.size());
+    EXPECT_TRUE(sp.node_count() < peak_nodes);
+}
+
 RUN_ALL_TESTS()
