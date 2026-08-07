@@ -295,4 +295,62 @@ TEST(scheduler, worker_thread_ids_differ_from_caller) {
     for (auto id : ids) EXPECT_TRUE(id != caller);
 }
 
+// ---- 8. cancel(handle) (Z5.6) ----------------------------------------
+
+TEST(scheduler, cancel_skips_handle_before_dispatch) {
+    // Post a task, immediately cancel it before the worker has a
+    // chance to run. The body must NOT execute.
+    Scheduler s(1);
+    std::atomic<int> counter{0};
+
+    OneShotTask t = make_increment(&counter);
+    s.post(t.h);
+    EXPECT_TRUE(s.cancel(t.h));
+
+    // Wait long enough for the worker to have processed the queue.
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::seconds(2);
+    while (!s.is_cancelled(t.h) && counter.load() == 0) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    // Body must not have run.
+    EXPECT_EQ(0, counter.load());
+    // The cancel flag is cleared by the worker after handling.
+    // Allow worker to finish its cleanup.
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    EXPECT_FALSE(s.is_cancelled(t.h));
+}
+
+TEST(scheduler, cancel_after_dispatch_is_noop) {
+    // If the worker has already popped the handle, cancel() marks
+    // the flag but the body still runs. The flag is cleared after
+    // the worker resumes.
+    Scheduler s(1);
+    std::atomic<int> counter{0};
+
+    std::vector<OneShotTask> tasks;
+    tasks.push_back(make_increment(&counter));
+    s.post(tasks.back().h);
+    // Wait until the worker has processed the handle.
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::seconds(2);
+    while (counter.load() == 0) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(1, counter.load());
+    // Cancel after the fact — still records the flag but doesn't help.
+    EXPECT_TRUE(s.cancel(tasks[0].h));
+}
+
+TEST(scheduler, is_cancelled_returns_state) {
+    Scheduler s(1);
+    std::atomic<int> counter{0};
+    OneShotTask t = make_increment(&counter);
+    EXPECT_FALSE(s.is_cancelled(t.h));
+    s.cancel(t.h);
+    EXPECT_TRUE(s.is_cancelled(t.h));
+}
+
 RUN_ALL_TESTS()
