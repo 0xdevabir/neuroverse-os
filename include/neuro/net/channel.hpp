@@ -26,6 +26,9 @@ public:
 
     void send(T value) {
         std::lock_guard lk(mu_);
+        if (closed_) {
+            throw std::runtime_error("send: channel closed");
+        }
         queue_.push(std::move(value));
         cv_.notify_one();
     }
@@ -66,6 +69,10 @@ public:
         std::lock_guard lk(mu_);
         closed_ = true;
         cv_.notify_all();
+    }
+
+    [[nodiscard]] bool is_closed() const noexcept {
+        return closed_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] std::size_t size() const {

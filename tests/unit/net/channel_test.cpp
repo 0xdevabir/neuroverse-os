@@ -208,4 +208,49 @@ TEST(channel, mpmc_deliver_all) {
     EXPECT_EQ(static_cast<std::size_t>(Producers * N), got.size());
 }
 
+// ---- 12. Z6.5: try_recv after close ----------------------------
+
+TEST(channel, try_recv_after_close_returns_nullopt) {
+    Channel<int> c;
+    c.close();
+    EXPECT_FALSE(c.try_recv().has_value());
+}
+
+TEST(channel, try_recv_after_close_drains_remaining) {
+    // Pre-close the channel with queued data; close() does NOT
+    // discard the queue (callers may still want to drain).
+    Channel<int> c;
+    c.send(1);
+    c.send(2);
+    c.close();
+
+    auto v1 = c.try_recv();
+    EXPECT_TRUE(v1.has_value());
+    EXPECT_EQ(1, *v1);
+    auto v2 = c.try_recv();
+    EXPECT_TRUE(v2.has_value());
+    EXPECT_EQ(2, *v2);
+    // After draining, try_recv returns nullopt even though closed.
+    EXPECT_FALSE(c.try_recv().has_value());
+}
+
+TEST(channel, send_after_close_throws) {
+    Channel<int> c;
+    c.close();
+    bool threw = false;
+    try {
+        c.send(1);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    EXPECT_TRUE(threw);
+}
+
+TEST(channel, is_closed_observable) {
+    Channel<int> c;
+    EXPECT_FALSE(c.is_closed());
+    c.close();
+    EXPECT_TRUE(c.is_closed());
+}
+
 RUN_ALL_TESTS()
