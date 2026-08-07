@@ -28,6 +28,7 @@ enum class MemoryKind : std::uint8_t {
     WriteBack  = 2,
     WriteCombine = 3,
     Device     = 4,
+    PIO        = 5,   // port-mapped I/O — distinct access path
 };
 
 class MemoryRegion : public KObject {
@@ -46,6 +47,9 @@ public:
     [[nodiscard]] std::uint64_t phys_base() const noexcept { return cfg_.phys_base; }
     [[nodiscard]] std::size_t   size()      const noexcept { return cfg_.size; }
     [[nodiscard]] MemoryKind    kind()      const noexcept { return cfg_.kind; }
+    [[nodiscard]] bool          prefetchable() const noexcept {
+        return cfg_.prefetch;
+    }
 
     // Capability-gated byte access. Returns nullopt if `cap` lacks the
     // requested right or the offset is out of range.

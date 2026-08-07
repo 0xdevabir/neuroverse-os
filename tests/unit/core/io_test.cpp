@@ -207,4 +207,67 @@ TEST(io, ioport_rejects_foreign_cap) {
     EXPECT_FALSE(a.write(bcap, 0xABCDu));
 }
 
+// ---- MemoryRegion MemoryKind::PIO distinct access path -------------
+
+TEST(io, memory_region_pio_kind_round_trip) {
+    // Z4.7: a MemoryRegion of kind PIO behaves like a regular
+    // capability-gated byte window but reports its kind distinctly so
+    // the kernel / drivers can route the access via port-I/O
+    // instructions instead of an MMIO load/store.
+    std::vector<std::byte> backing(8, std::byte{0});
+    MemoryRegion pio(cfg(0xCF8, backing.size(), MemoryKind::PIO),
+                     backing.data());
+    EXPECT_EQ(MemoryKind::PIO, pio.kind());
+
+    auto cap = cap_for(pio, CapRight::Read | CapRight::Write);
+    EXPECT_TRUE(pio.write_byte(0, std::uint8_t{0xAB}, cap));
+    EXPECT_TRUE(pio.write_byte(4, std::uint8_t{0xCD}, cap));
+
+    EXPECT_EQ(static_cast<std::uint8_t>(0xAB), pio.read_byte(0, cap).value());
+    EXPECT_EQ(static_cast<std::uint8_t>(0xCD), pio.read_byte(4, cap).value());
+
+    // The capability gate still applies to PIO regions.
+    auto ronly = cap_for(pio, CapRight::Read);
+    EXPECT_FALSE(pio.write_byte(0, std::uint8_t{0xFF}, ronly));
+}
+
+TEST(io, memory_region_pio_distinct_from_device) {
+    // PIO must be a distinct enum value from Device / Cached so that
+    // routing decisions in the driver layer remain unambiguous.
+    EXPECT_TRUE(MemoryKind::PIO != MemoryKind::Device);
+    EXPECT_TRUE(MemoryKind::PIO != MemoryKind::Uncached);
+    EXPECT_TRUE(MemoryKind::PIO != MemoryKind::Cached);
+}
+
+// ---- MemoryRegion prefetch hint is observable -----------------------
+
+TEST(io, memory_region_prefetchable_default_false) {
+    // Z4.8: prefetchable() defaults to false when Config::prefetch is
+    // unset (the default-constructed Config has prefetch=false).
+    std::vector<std::byte> backing(8, std::byte{0});
+    MemoryRegion mr(cfg(0x9000, backing.size()), backing.data());
+    EXPECT_FALSE(mr.prefetchable());
+}
+
+TEST(io, memory_region_prefetchable_true_when_set) {
+    std::vector<std::byte> backing(8, std::byte{0});
+    MemoryRegion mr(cfg(0xA000, backing.size(), MemoryKind::Device, true),
+                    backing.data());
+    EXPECT_TRUE(mr.prefetchable());
+}
+
+TEST(io, memory_region_prefetchable_independent_of_kind) {
+    // Any MemoryKind can be marked prefetchable — the prefetch bit is
+    // orthogonal to caching behaviour.
+    for (auto k : {MemoryKind::Uncached, MemoryKind::Cached,
+                   MemoryKind::WriteBack, MemoryKind::WriteCombine,
+                   MemoryKind::Device,   MemoryKind::PIO}) {
+        std::vector<std::byte> backing(4, std::byte{0});
+        MemoryRegion mr(cfg(0xB000, backing.size(), k, true),
+                        backing.data());
+        EXPECT_TRUE(mr.prefetchable());
+        EXPECT_EQ(k, mr.kind());
+    }
+}
+
 RUN_ALL_TESTS()
