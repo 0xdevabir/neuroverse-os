@@ -484,6 +484,24 @@ $(TEST_DIR)/unit/core/version_test.bin: $(TEST_DIR)/unit/core/version_test.cpp \
                                              $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
+# install_test is intentionally excluded from `make test` because it
+# shells out to `make install`/`make uninstall` and stale TempFiles can
+# collide with parallel runs. Run it explicitly via `make test-install`.
+INSTALL_TESTS := $(TEST_DIR)/unit/install_test
+INSTALL_TESTS_BIN := $(addsuffix .bin,$(INSTALL_TESTS))
+
+$(TEST_DIR)/unit/install_test.bin: $(TEST_DIR)/unit/install_test.cpp \
+                                   Makefile \
+                                   $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+test-install: $(INSTALL_TESTS_BIN) $(NEURO_HOST_LIBRARY)
+	@for t in $(INSTALL_TESTS_BIN); do \
+	    echo "==> $$t"; \
+	    ./$$t || exit $$?; \
+	done
+	@$(MAKE) --no-print-directory install-consumer
+
 $(TEST_DIR)/unit/core/capability_test.bin: $(TEST_DIR)/unit/core/capability_test.cpp \
                                           include/neuro/core/capability.hpp \
                                           $(TEST_DIR)/test_framework.hpp
@@ -797,4 +815,108 @@ clean:
 	rm -f $(NEURO_LIB_OBJS)
 	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(FS_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(IPC_TESTS_BIN) $(UMBRELLA_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
-.PHONY: all run test clean
+# ---- Distribution (Phase P1.2) -----------------------------------------
+#
+# Staged install/uninstall for users that want to consume the header-
+# only API + the static host library. Defaults match what GNU autotools
+# users expect; override on the command line:
+#
+#   make install PREFIX=/opt/neuro
+#   make install DESTDIR=/tmp/stage PREFIX=/usr/local
+#   make uninstall DESTDIR=/tmp/stage
+#
+# No `install` tool dependency beyond the BSD/GNU coreutils `install`.
+
+PREFIX    ?= /usr/local
+DESTDIR   ?=
+INCLUDEDIR ?= $(PREFIX)/include
+LIBDIR    ?= $(PREFIX)/lib
+
+INSTALL         := install
+INSTALL_DATA    := $(INSTALL) -m 0644
+INSTALL_PROGRAM := $(INSTALL) -m 0755
+INSTALL_DIR     := $(INSTALL) -d
+
+# Manifest of files to remove on `make uninstall`. We compute it once
+# from the public source tree so contributors don't have to update two
+# lists.
+NEURO_PUBLIC_HEADERS := $(shell find include/neuro -type f \( -name '*.hpp' -o -name '*.h' \) | sort)
+NEURO_HOST_LIBRARY  := libneuro_host.a
+NEURO_PKGCONFIG     := neuroverse-os.pc
+
+# Build a host-side convenience library that bundles all the .o files.
+# Consumers who want a no-source drop-in use this; consumers that only
+# need the headers can ignore it.
+$(NEURO_HOST_LIBRARY): $(NEURO_LIB_OBJS)
+	$(AR) rcs $@ $(NEURO_LIB_OBJS)
+
+# `install-headers` is the smallest useful primitive. It is exposed
+# separately so pkg-config generators and downstream packaging
+# scripts can stage just the headers if that's all they need.
+install-headers:
+	@echo "Installing NeuroVerse OS public headers to $(DESTDIR)$(INCLUDEDIR)/neuro"
+	$(INSTALL_DIR) "$(DESTDIR)$(INCLUDEDIR)/neuro"
+	@for f in $(NEURO_PUBLIC_HEADERS); do \
+	    rel=$${f#include/}; \
+	    dir=$$(dirname "$$rel"); \
+	    $(INSTALL_DIR) "$(DESTDIR)$(INCLUDEDIR)/$$dir"; \
+	    $(INSTALL_DATA) "$$f" "$(DESTDIR)$(INCLUDEDIR)/$$rel"; \
+	done
+
+# Full install: headers + host library + pkg-config (Phase P1.3 ships
+# the .pc rule; this target gracefully degrades if it's missing).
+install: install-headers
+	@echo "Installing NeuroVerse OS host library to $(DESTDIR)$(LIBDIR)"
+	$(INSTALL_DIR) "$(DESTDIR)$(LIBDIR)"
+	$(INSTALL_DATA) "$(NEURO_HOST_LIBRARY)" "$(DESTDIR)$(LIBDIR)/$(NEURO_HOST_LIBRARY)"
+	@if [ -f "$(NEURO_PKGCONFIG)" ]; then \
+	    $(INSTALL_DIR) "$(DESTDIR)$(LIBDIR)/pkgconfig"; \
+	    $(INSTALL_DATA) "$(NEURO_PKGCONFIG)" "$(DESTDIR)$(LIBDIR)/pkgconfig/$(NEURO_PKGCONFIG)"; \
+	fi
+	@echo "Install complete."
+
+# Print what `install` would do without touching the filesystem. Useful
+# for CI dry-runs and packaging reviews.
+install-dry-run:
+	@echo "Would install headers under $(DESTDIR)$(INCLUDEDIR)/neuro:"
+	@for f in $(NEURO_PUBLIC_HEADERS); do \
+	    printf '  %s\n' "$(DESTDIR)$(INCLUDEDIR)/$${f#include/}"; \
+	done
+	@echo "Would install library:"
+	@printf '  %s\n' "$(DESTDIR)$(LIBDIR)/$(NEURO_HOST_LIBRARY)"
+	@if [ -f "$(NEURO_PKGCONFIG)" ]; then \
+	    printf '  %s\n' "$(DESTDIR)$(LIBDIR)/pkgconfig/$(NEURO_PKGCONFIG)"; \
+	fi
+
+# `uninstall` removes everything `install` placed on disk. We iterate
+# the same source-of-truth list used by install-headers to avoid
+# divergence.
+uninstall:
+	@echo "Uninstalling NeuroVerse OS from $(DESTDIR)$(PREFIX)"
+	@for f in $(NEURO_PUBLIC_HEADERS); do \
+	    rm -f "$(DESTDIR)$(INCLUDEDIR)/$${f#include/}"; \
+	done
+	@-find "$(DESTDIR)$(INCLUDEDIR)/neuro" -type d -empty -delete 2>/dev/null || true
+	rm -f "$(DESTDIR)$(LIBDIR)/$(NEURO_HOST_LIBRARY)"
+	rm -f "$(DESTDIR)$(LIBDIR)/pkgconfig/$(NEURO_PKGCONFIG)"
+	@echo "Uninstall complete."
+
+# Standalone installed-header/library consumer. This intentionally lives
+# outside INTEGRATION_TESTS: it creates a temporary staged prefix, then
+# compiles the source using only the staged artifacts.
+install-consumer: $(NEURO_HOST_LIBRARY)
+	@set -eu; \
+	stage=$$(mktemp -d "$${TMPDIR:-/tmp}/neuro-install.XXXXXX"); \
+	trap 'rm -rf "$$stage"' EXIT INT TERM; \
+	$(MAKE) --no-print-directory install DESTDIR="$$stage" PREFIX=/usr/local; \
+	$(CXX) $(CXXFLAGS) -I"$$stage/usr/local/include" \
+	    tests/integration/install_consumer.cpp \
+	    "$$stage/usr/local/lib/$(NEURO_HOST_LIBRARY)" \
+	    -o "$$stage/consumer"; \
+	"$$stage/consumer"; \
+	$(MAKE) --no-print-directory uninstall DESTDIR="$$stage" PREFIX=/usr/local
+
+# Keep install-consumer out of the default `test` list: it owns its
+# temporary staged prefix and is an explicit distribution check.
+
+.PHONY: all run test clean install install-headers install-dry-run uninstall install-consumer
