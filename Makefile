@@ -612,7 +612,8 @@ INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/fs_cap \
                     $(TEST_DIR)/integration/net_cap \
                     $(TEST_DIR)/integration/sched_ipc \
-                    $(TEST_DIR)/integration/dev_cap
+                    $(TEST_DIR)/integration/dev_cap \
+                    $(TEST_DIR)/integration/pulse_learn
 INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
 
 $(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp \
@@ -724,6 +725,14 @@ $(TEST_DIR)/integration/dev_cap.bin: $(TEST_DIR)/integration/dev_cap.cpp \
                                       neuro_driver.o \
                                       $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_driver.o -o $@
+
+# pulse_learn links the learn implementation object.
+$(TEST_DIR)/integration/pulse_learn.bin: $(TEST_DIR)/integration/pulse_learn.cpp \
+                                           include/neuro/pulse/metric.hpp \
+                                           include/neuro/learn/optimizer.hpp \
+                                           neuro_learn.o \
+                                           $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_learn.o -o $@
 
 test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(FS_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(IPC_TESTS_BIN) $(UMBRELLA_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(FS_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(IPC_TESTS_BIN) $(UMBRELLA_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
