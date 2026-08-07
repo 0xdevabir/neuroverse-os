@@ -41,28 +41,24 @@ public:
     explicit Counter(std::string name, std::string help)
         : name_(std::move(name)), help_(std::move(help)) {}
 
+    // Atomically add v. std::atomic<double>::fetch_add with relaxed
+    // memory order is sufficient because Counter is the canonical
+    // lossless-telemetry primitive — readers tolerate stale values.
     void inc(double v = 1.0) noexcept {
-        std::atomic_fetch_add_explicit(
-            &bits_, std::bit_cast<std::int64_t>(v + value()),
-            std::memory_order_relaxed);
-        // The above is incorrect for floats; we keep it as a simple
-        // integer counter on the host stub. Real impl in Phase 1.
-        (void)v;
+        bits_.fetch_add(v, std::memory_order_relaxed);
     }
 
     [[nodiscard]] double value() const noexcept {
-        // Reinterpret bits_ as double (host stub — not atomic safe,
-        // but sufficient for single-threaded tests).
-        return std::bit_cast<double>(bits_.load(std::memory_order_relaxed));
+        return bits_.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] const std::string& name() const noexcept { return name_; }
     [[nodiscard]] const std::string& help() const noexcept { return help_; }
 
 private:
-    std::string              name_;
-    std::string              help_;
-    std::atomic<std::int64_t> bits_{0};
+    std::string         name_;
+    std::string         help_;
+    std::atomic<double> bits_{0.0};
 };
 
 // Value that can go up or down (e.g. queue depth).
@@ -72,25 +68,32 @@ public:
         : name_(std::move(name)), help_(std::move(help)) {}
 
     void set(double v) noexcept {
-        std::atomic_store_explicit(
-            &bits_, std::bit_cast<std::int64_t>(v),
-            std::memory_order_relaxed);
+        bits_.store(v, std::memory_order_relaxed);
     }
 
-    void inc(double v = 1.0) noexcept { set(value() + v); }
-    void dec(double v = 1.0) noexcept { set(value() - v); }
+    void inc(double v = 1.0) noexcept {
+        // Read-modify-write on a double. The non-atomic variant is
+        // intentional — Prometheus-style reads tolerate the rare
+        // torn increment; tighter guarantees land in Phase 1.
+        double cur = bits_.load(std::memory_order_relaxed);
+        while (!bits_.compare_exchange_weak(
+                   cur, cur + v,
+                   std::memory_order_relaxed,
+                   std::memory_order_relaxed)) {}
+    }
+    void dec(double v = 1.0) noexcept { inc(-v); }
 
     [[nodiscard]] double value() const noexcept {
-        return std::bit_cast<double>(bits_.load(std::memory_order_relaxed));
+        return bits_.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] const std::string& name() const noexcept { return name_; }
     [[nodiscard]] const std::string& help() const noexcept { return help_; }
 
 private:
-    std::string               name_;
-    std::string               help_;
-    std::atomic<std::int64_t> bits_{0};
+    std::string         name_;
+    std::string         help_;
+    std::atomic<double> bits_{0.0};
 };
 
 // Histogram: count + sum + fixed bucket bounds.

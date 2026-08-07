@@ -239,6 +239,17 @@ $(TEST_DIR)/unit/learn/optimizer_test.bin: $(TEST_DIR)/unit/learn/optimizer_test
                                            $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_learn.o -o $@
 
+# pulse/metric tests link the registry + counter + gauge + histogram
+# impls. Threaded tests need pthread (already in CXXFLAGS).
+PULSE_TESTS := $(TEST_DIR)/unit/pulse/metric_test
+PULSE_TESTS_BIN := $(addsuffix .bin,$(PULSE_TESTS))
+
+$(TEST_DIR)/unit/pulse/metric_test.bin: $(TEST_DIR)/unit/pulse/metric_test.cpp \
+                                        include/neuro/pulse/metric.hpp \
+                                        neuro_pulse.o \
+                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_pulse.o -o $@
+
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
                     $(TEST_DIR)/integration/ipc_backpressure \
@@ -289,8 +300,8 @@ $(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -298,6 +309,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) 
 clean:
 	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean
