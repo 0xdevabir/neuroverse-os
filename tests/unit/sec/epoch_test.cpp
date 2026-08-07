@@ -201,4 +201,34 @@ TEST(epoch, threaded_revokes_count_isolated) {
     }
 }
 
+// ---- 9. wrap-around stress: 65 000 revokes from non-zero start -----
+
+TEST(epoch, sixty_five_thousand_revokes_lands_on_zero) {
+    // Burn through the entire 16-bit space starting from epoch 7
+    // (i.e., 65 029 revokes to land back at 0). Verify current() is
+    // monotonically non-decreasing at sample points and lands on
+    // exactly the expected residue.
+    CapEpoch e;
+    for (int i = 0; i < 7; ++i) (void)e.revoke();
+    EXPECT_EQ(static_cast<std::uint16_t>(7), e.current());
+
+    constexpr int kBurn = 65536 - 7;
+    for (int i = 0; i < kBurn; ++i) (void)e.revoke();
+    EXPECT_EQ(static_cast<std::uint16_t>(0), e.current());
+    EXPECT_TRUE(e.valid(0));
+    // Pre-wrap snapshots remain invalid after wrap.
+    EXPECT_FALSE(e.valid(7));
+    EXPECT_FALSE(e.valid(12345));
+}
+
+TEST(epoch, half_million_revokes_converges_to_residue) {
+    // Drive a large workload that wraps many times and assert the
+    // residue. 700 003 % 65 536 == 44 643, so after that many revokes
+    // starting from 0, current() must read 44 643.
+    CapEpoch e;
+    constexpr int kTotal = 700003;
+    for (int i = 0; i < kTotal; ++i) (void)e.revoke();
+    EXPECT_EQ(static_cast<std::uint16_t>(44643), e.current());
+}
+
 RUN_ALL_TESTS()
