@@ -495,8 +495,14 @@ $(TEST_DIR)/unit/install_test.bin: $(TEST_DIR)/unit/install_test.cpp \
                                    $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
-test-install: $(INSTALL_TESTS_BIN) $(NEURO_HOST_LIBRARY)
-	@for t in $(INSTALL_TESTS_BIN); do \
+$(TEST_DIR)/unit/pkgconfig_test.bin: $(TEST_DIR)/unit/pkgconfig_test.cpp \
+                                     Makefile \
+                                     neuroverse-os.pc.in \
+                                     $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+test-install: $(INSTALL_TESTS_BIN) $(TEST_DIR)/unit/pkgconfig_test.bin $(NEURO_HOST_LIBRARY)
+	@for t in $(INSTALL_TESTS_BIN) $(TEST_DIR)/unit/pkgconfig_test.bin; do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -831,6 +837,7 @@ PREFIX    ?= /usr/local
 DESTDIR   ?=
 INCLUDEDIR ?= $(PREFIX)/include
 LIBDIR    ?= $(PREFIX)/lib
+VERSION   ?= 0.1.0
 
 INSTALL         := install
 INSTALL_DATA    := $(INSTALL) -m 0644
@@ -869,9 +876,12 @@ install: install-headers
 	@echo "Installing NeuroVerse OS host library to $(DESTDIR)$(LIBDIR)"
 	$(INSTALL_DIR) "$(DESTDIR)$(LIBDIR)"
 	$(INSTALL_DATA) "$(NEURO_HOST_LIBRARY)" "$(DESTDIR)$(LIBDIR)/$(NEURO_HOST_LIBRARY)"
-	@if [ -f "$(NEURO_PKGCONFIG)" ]; then \
+	@if [ -f "neuroverse-os.pc.in" ]; then \
 	    $(INSTALL_DIR) "$(DESTDIR)$(LIBDIR)/pkgconfig"; \
-	    $(INSTALL_DATA) "$(NEURO_PKGCONFIG)" "$(DESTDIR)$(LIBDIR)/pkgconfig/$(NEURO_PKGCONFIG)"; \
+	    sed -e 's|@PREFIX@|$(PREFIX)|g' \
+	        -e 's|@VERSION@|$(VERSION)|g' \
+	        neuroverse-os.pc.in > "$(DESTDIR)$(LIBDIR)/pkgconfig/neuroverse-os.pc"; \
+	    chmod 0644 "$(DESTDIR)$(LIBDIR)/pkgconfig/neuroverse-os.pc"; \
 	fi
 	@echo "Install complete."
 
@@ -884,8 +894,8 @@ install-dry-run:
 	done
 	@echo "Would install library:"
 	@printf '  %s\n' "$(DESTDIR)$(LIBDIR)/$(NEURO_HOST_LIBRARY)"
-	@if [ -f "$(NEURO_PKGCONFIG)" ]; then \
-	    printf '  %s\n' "$(DESTDIR)$(LIBDIR)/pkgconfig/$(NEURO_PKGCONFIG)"; \
+	@if [ -f "neuroverse-os.pc.in" ]; then \
+	    printf '  %s\n' "$(DESTDIR)$(LIBDIR)/pkgconfig/neuroverse-os.pc"; \
 	fi
 
 # `uninstall` removes everything `install` placed on disk. We iterate
