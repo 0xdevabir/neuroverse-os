@@ -162,7 +162,8 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test \
-             $(TEST_DIR)/unit/pkg/sha3_family_test
+             $(TEST_DIR)/unit/pkg/sha3_family_test \
+             $(TEST_DIR)/unit/pkg/manifest_test
 PKG_TESTS_BIN := $(addsuffix .bin,$(PKG_TESTS))
 
 # sha3_test is header-only (sha3.hpp is inline).
@@ -178,6 +179,15 @@ $(TEST_DIR)/unit/pkg/sha3_family_test.bin: $(TEST_DIR)/unit/pkg/sha3_family_test
                                            include/neuro/pkg/digest.hpp \
                                            $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+# manifest_test exercises Manifest::canonicalise/content_root/verify;
+# it links HostStore so we can do end-to-end ingest + verify.
+$(TEST_DIR)/unit/pkg/manifest_test.bin: $(TEST_DIR)/unit/pkg/manifest_test.cpp \
+                                        include/neuro/pkg/store.hpp \
+                                        include/neuro/pkg/sha3.hpp \
+                                        neuro_pkg.o \
+                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_pkg.o -o $@
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \

@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -43,10 +44,49 @@ struct ManifestEntry {
     Digest      digest{};
 };
 
+class Store;  // defined later in this header
+
 struct Manifest {
     std::string                  package_name;
     std::string                  version;
     std::vector<ManifestEntry>   entries;
+
+    // Optional content root recorded by the signer at build time.
+    // When present, Manifest::verify() compares it against the
+    // locally recomputed root to detect tampering.
+    std::optional<Digest>        trusted_root;
+
+    // Canonicalise the manifest into a flat byte string. The format
+    // is a simple length-prefixed encoding so adding a new field
+    // can't accidentally match an old digest:
+    //
+    //   [4 bytes BE: package_name.length]
+    //   [N bytes:    package_name]
+    //   [4 bytes BE: version.length]
+    //   [M bytes:    version]
+    //   [4 bytes BE: entries.size()]
+    //   for each entry:
+    //     [4 bytes BE: name.length]
+    //     [K bytes:    name]
+    //     [64 bytes:   digest]
+    [[nodiscard]] std::vector<std::byte> canonicalise() const;
+
+    // Compute the SHA3-512 of canonicalise(). Two manifests with the
+    // same content root are byte-equivalent in our encoding; this is
+    // the value the manifest is signed against (or stored under).
+    [[nodiscard]] Digest content_root() const noexcept;
+
+    // Verify the manifest against a Store. A manifest is valid iff
+    //   1. every entry's digest is present in the store, and
+    //   2. if a trusted_root was recorded, the locally recomputed
+    //      content_root matches it.
+    //
+    // Returns std::nullopt on success. On failure, returns a short
+    // human-readable reason. Verifying against a Store ensures a
+    // malicious manifest can't claim to contain a blob that has
+    // never been ingested.
+    [[nodiscard]] std::optional<std::string>
+    verify(const Store& s) const noexcept;
 };
 
 // Content-addressed store trait. Implementations may be in-memory
