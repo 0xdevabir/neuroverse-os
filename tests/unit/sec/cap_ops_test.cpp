@@ -375,4 +375,68 @@ TEST(cap_ops, move_with_none_rights_is_pure_transfer) {
     EXPECT_TRUE(dst.lookup(r.handle)->has(kAll));
 }
 
+// ---- 8. revoke on multi-cap space: handles survive, resolve fails -
+
+TEST(cap_ops, revoke_invalidates_two_caps_but_handles_survive) {
+    // After revoke, every capability in the space stops resolving.
+    // However, the radix trie still holds the handles and a fresh
+    // mint() bumps the epoch so subsequent caps resolve cleanly.
+    CapabilitySpace space;
+    CapEpoch        epoch;
+    const auto h1 = CapOps::mint(space, epoch, 1, CapRight::Read, 1);
+    const auto h2 = CapOps::mint(space, epoch, 2, CapRight::Write, 1);
+    EXPECT_TRUE(h1 != neuro::sec::kInvalidHandle);
+    EXPECT_TRUE(h2 != neuro::sec::kInvalidHandle);
+
+    EXPECT_TRUE(CapOps::resolve(space, epoch, h1, CapRight::Read).has_value());
+    EXPECT_TRUE(CapOps::resolve(space, epoch, h2, CapRight::Write).has_value());
+
+    CapOps::revoke(space, epoch);
+
+    // Both caps stop resolving — independent of object_id or rights.
+    EXPECT_FALSE(CapOps::resolve(space, epoch, h1, CapRight::Read).has_value());
+    EXPECT_FALSE(CapOps::resolve(space, epoch, h2, CapRight::Write).has_value());
+
+    // But the handles still exist in the radix trie.
+    EXPECT_TRUE(space.contains(h1));
+    EXPECT_TRUE(space.contains(h2));
+    EXPECT_TRUE(space.lookup(h1).has_value());
+    EXPECT_TRUE(space.lookup(h2).has_value());
+
+    // The Capability values retain their object_id even though
+    // they're now invalid by epoch.
+    EXPECT_EQ(static_cast<std::uint64_t>(1), space.lookup(h1)->object_id);
+    EXPECT_EQ(static_cast<std::uint64_t>(2), space.lookup(h2)->object_id);
+}
+
+TEST(cap_ops, post_revoke_mint_resolves_old_does_not) {
+    CapabilitySpace space;
+    CapEpoch        epoch;
+    const auto h_old = CapOps::mint(space, epoch, 7, CapRight::Read, 1);
+    CapOps::revoke(space, epoch);
+
+    // Post-revoke mint carries the new epoch and resolves.
+    const auto h_new = CapOps::mint(space, epoch, 9, CapRight::Read, 1);
+    EXPECT_TRUE(CapOps::resolve(space, epoch, h_new, CapRight::Read).has_value());
+    // The pre-revoke cap is dead.
+    EXPECT_FALSE(CapOps::resolve(space, epoch, h_old, CapRight::Read)
+                     .has_value());
+}
+
+TEST(cap_ops, revoke_twice_invalidates_intermediate_mints) {
+    // Mint cap A, revoke, mint cap B, revoke, mint cap C.
+    // Only C should resolve; A and B are dead.
+    CapabilitySpace space;
+    CapEpoch        epoch;
+    const auto hA = CapOps::mint(space, epoch, 1, CapRight::Read, 1);
+    CapOps::revoke(space, epoch);
+    const auto hB = CapOps::mint(space, epoch, 2, CapRight::Read, 1);
+    CapOps::revoke(space, epoch);
+    const auto hC = CapOps::mint(space, epoch, 3, CapRight::Read, 1);
+
+    EXPECT_TRUE(CapOps::resolve(space, epoch, hC, CapRight::Read).has_value());
+    EXPECT_FALSE(CapOps::resolve(space, epoch, hB, CapRight::Read).has_value());
+    EXPECT_FALSE(CapOps::resolve(space, epoch, hA, CapRight::Read).has_value());
+}
+
 RUN_ALL_TESTS()
