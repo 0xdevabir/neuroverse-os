@@ -179,7 +179,8 @@ $(TEST_DIR)/unit/mem/page_table_test.bin: $(TEST_DIR)/unit/mem/page_table_test.c
 
 PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test \
              $(TEST_DIR)/unit/pkg/sha3_family_test \
-             $(TEST_DIR)/unit/pkg/manifest_test
+             $(TEST_DIR)/unit/pkg/manifest_test \
+             $(TEST_DIR)/unit/pkg/digest_test
 BOOT_TESTS := $(TEST_DIR)/unit/boot/protocol_test
 PKG_TESTS_BIN := $(addsuffix .bin,$(PKG_TESTS))
 BOOT_TESTS_BIN := $(addsuffix .bin,$(BOOT_TESTS))
@@ -206,6 +207,12 @@ $(TEST_DIR)/unit/pkg/manifest_test.bin: $(TEST_DIR)/unit/pkg/manifest_test.cpp \
                                         neuro_pkg.o \
                                         $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_pkg.o -o $@
+
+# digest_test covers DigestN aliases, ordering and hex encoding.
+$(TEST_DIR)/unit/pkg/digest_test.bin: $(TEST_DIR)/unit/pkg/digest_test.cpp \
+                                      include/neuro/pkg/digest.hpp \
+                                      $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # boot signing/verification tests link the boot subsystem.
 $(TEST_DIR)/unit/boot/protocol_test.bin: $(TEST_DIR)/unit/boot/protocol_test.cpp \
