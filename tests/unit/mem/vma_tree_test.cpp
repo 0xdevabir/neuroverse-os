@@ -195,4 +195,67 @@ TEST(vma_tree, vma_contains_and_size) {
     EXPECT_EQ(static_cast<std::size_t>(0x1000), v.size());
 }
 
+// ---- 12. split() / coalesce() on partial overlap -------------------
+
+TEST(vma_tree, split_at_middle_yields_two_vm_as) {
+    // Z4.4: insert [0x1000, 0x3000), then split at 0x2000.
+    // Result: [0x1000, 0x2000) and [0x2000, 0x3000).
+    VMATree t;
+    t.insert(vma(0x1000, 0x3000, /*rights=*/7, /*backing=*/0xABCD));
+    EXPECT_TRUE(t.split(0x2000));
+    EXPECT_EQ(2u, t.size());
+
+    auto left  = t.find(0x1500);
+    auto right = t.find(0x2500);
+    EXPECT_TRUE(left.has_value());
+    EXPECT_TRUE(right.has_value());
+    EXPECT_EQ(static_cast<std::uint64_t>(0x1000), left->start);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x2000), left->end);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x2000), right->start);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x3000), right->end);
+
+    // Right half inherits the rights and backing.
+    EXPECT_EQ(static_cast<std::uint32_t>(7),       right->rights);
+    EXPECT_EQ(static_cast<std::uint64_t>(0xABCD), right->backing);
+
+    // Boundary addresses remain valid.
+    EXPECT_TRUE(t.find(0x1000).has_value());
+    EXPECT_TRUE(t.find(0x2000).has_value());    // start of right half
+    EXPECT_EQ(static_cast<std::uint64_t>(0x2000), t.find(0x2000)->start);
+    EXPECT_TRUE(t.find(0x2001).has_value());
+    EXPECT_FALSE(t.find(0x3000).has_value());   // end-exclusive
+}
+
+TEST(vma_tree, split_rejects_boundary_and_outside) {
+    VMATree t;
+    t.insert(vma(0x1000, 0x3000));
+    EXPECT_FALSE(t.split(0x1000));   // at start — no split
+    EXPECT_FALSE(t.split(0x3000));   // at end — no split
+    EXPECT_FALSE(t.split(0x0500));   // before the interval
+    EXPECT_FALSE(t.split(0x3500));   // after the interval
+    EXPECT_EQ(1u, t.size());        // unchanged
+}
+
+TEST(vma_tree, coalesce_equal_merges_adjacent_with_same_meta) {
+    VMATree t;
+    t.insert(vma(0x1000, 0x2000, 7, 0xAB));
+    t.insert(vma(0x2000, 0x3000, 7, 0xAB));
+    EXPECT_EQ(2u, t.size());
+    EXPECT_EQ(static_cast<std::size_t>(1), t.coalesce_equal());
+    EXPECT_EQ(1u, t.size());
+    auto m = t.find(0x1800);
+    EXPECT_TRUE(m.has_value());
+    EXPECT_EQ(static_cast<std::uint64_t>(0x1000), m->start);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x3000), m->end);
+}
+
+TEST(vma_tree, coalesce_equal_skips_when_meta_differs) {
+    VMATree t;
+    t.insert(vma(0x1000, 0x2000, 7, 0xAB));
+    t.insert(vma(0x2000, 0x3000, 3, 0xAB));     // different rights
+    t.insert(vma(0x3000, 0x4000, 7, 0xCD));     // different backing
+    EXPECT_EQ(static_cast<std::size_t>(0), t.coalesce_equal());
+    EXPECT_EQ(3u, t.size());
+}
+
 RUN_ALL_TESTS()

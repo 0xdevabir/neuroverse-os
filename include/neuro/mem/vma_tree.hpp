@@ -61,6 +61,57 @@ public:
         return true;
     }
 
+    // Split the VMA that contains `addr` into two contiguous VMAs at
+    // `addr`. The right half inherits the rights and backing from the
+    // original VMA. Returns false if no VMA contains `addr` or if
+    // `addr` is at the boundary (no split needed). Splits are useful
+    // for re-mapping a sub-range: erase the left half, change the
+    // rights on the right half, etc.
+    bool split(std::uint64_t addr) {
+        auto it = std::upper_bound(
+            entries_.begin(), entries_.end(), addr,
+            [](std::uint64_t a, const VMA& v) { return a < v.start; });
+        if (it == entries_.begin()) return false;
+        --it;
+        if (!it->contains(addr))    return false;
+        if (addr == it->start)      return false;
+        if (addr == it->end)        return false;
+
+        VMA right;
+        right.start   = addr;
+        right.end     = it->end;
+        right.rights  = it->rights;
+        right.backing = it->backing;
+        it->end       = addr;
+        entries_.push_back(right);
+        std::sort(entries_.begin(), entries_.end(),
+                  [](const VMA& a, const VMA& b) {
+                      return a.start < b.start;
+                  });
+        return true;
+    }
+
+    // Merge any two adjacent VMAs that share the same rights and
+    // backing (one of coalescing strategies after un-mapping). Returns
+    // the number of merges performed.
+    std::size_t coalesce_equal() {
+        std::size_t merges = 0;
+        for (std::size_t i = 0; i + 1 < entries_.size(); /* see body */) {
+            auto& a = entries_[i];
+            auto& b = entries_[i + 1];
+            if (a.end == b.start &&
+                a.rights == b.rights &&
+                a.backing == b.backing) {
+                a.end = b.end;
+                entries_.erase(entries_.begin() + i + 1);
+                ++merges;
+            } else {
+                ++i;
+            }
+        }
+        return merges;
+    }
+
     // Find the VMA containing `addr`. Returns nullopt if no match.
     [[nodiscard]] std::optional<VMA> find(std::uint64_t addr) const {
         // Binary-search the right edge first (largest start <= addr).
