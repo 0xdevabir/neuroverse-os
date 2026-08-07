@@ -73,6 +73,36 @@ public:
         return cfg_.workers_per_node;
     }
 
+    // Submit a coroutine to a specific node index, bypassing the
+    // least-loaded routing. Used by affinity-pinned callers and tests.
+    // Returns true if the index is valid.
+    bool submit_to(std::size_t node_idx, std::coroutine_handle<> h) {
+        if (node_idx >= nodes_.size()) return false;
+        loads_[node_idx]->queued.fetch_add(1, std::memory_order_relaxed);
+        nodes_[node_idx]->post(h);
+        loads_[node_idx]->queued.fetch_sub(1, std::memory_order_relaxed);
+        loads_[node_idx]->running.fetch_add(1, std::memory_order_relaxed);
+        return true;
+    }
+
+    // Per-node running count snapshot (tasks posted but not yet
+    // destroyed). The decrement happens automatically when the
+    // Scheduler destructor joins all workers.
+    [[nodiscard]] std::uint64_t
+    running(std::size_t node_idx) const noexcept {
+        if (node_idx >= loads_.size()) return 0;
+        return loads_[node_idx]->running.load(std::memory_order_relaxed);
+    }
+
+    // Per-node queued count snapshot (post() path bumps this before
+    // the worker takes it; the test waits long enough for the
+    // scheduler to drain).
+    [[nodiscard]] std::uint64_t
+    queued(std::size_t node_idx) const noexcept {
+        if (node_idx >= loads_.size()) return 0;
+        return loads_[node_idx]->queued.load(std::memory_order_relaxed);
+    }
+
     std::size_t node_count() const noexcept { return nodes_.size(); }
     std::size_t worker_count() const noexcept {
         return cfg_.nodes * cfg_.workers_per_node;

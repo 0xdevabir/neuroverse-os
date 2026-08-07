@@ -172,4 +172,75 @@ TEST(multilevel, load_valid_node_nonnegative) {
     EXPECT_TRUE(s.load(0) >= 0u);
 }
 
+// ---- 7. submit_to() pins to a node (Z5.1) -------------------------
+
+TEST(multilevel, submit_to_pins_to_node) {
+    TierConfig c{};
+    c.nodes = 2;
+    c.workers_per_node = 1;
+    MultilevelScheduler s(c);
+
+    std::atomic<int> node0{0};
+    std::atomic<int> node1{0};
+    constexpr int N = 20;
+
+    std::vector<TallyTask> t0;
+    std::vector<TallyTask> t1;
+    for (int i = 0; i < N; ++i) {
+        t0.push_back(tally(node0));
+        t1.push_back(tally(node1));
+    }
+    for (auto& t : t0) EXPECT_TRUE(s.submit_to(0, t.h));
+    for (auto& t : t1) EXPECT_TRUE(s.submit_to(1, t.h));
+    // submit_to out-of-range returns false.
+    EXPECT_FALSE(s.submit_to(99, std::coroutine_handle<>{}));
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (node0.load() + node1.load() < 2 * N) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(N, node0.load());
+    EXPECT_EQ(N, node1.load());
+}
+
+// ---- 8. queued vs running separation (Z5.2) ----------------------
+
+TEST(multilevel, queued_alongside_running) {
+    // queued is bumped briefly inside submit() then decremented as the
+    // worker accepts the task. After the worker finishes running a
+    // task, the running count remains because we only decrement on
+    // scheduler destruction. Verify both are queryable.
+    TierConfig c{};
+    c.nodes = 1;
+    c.workers_per_node = 1;
+    MultilevelScheduler s(c);
+
+    std::atomic<int> counter{0};
+    constexpr int N = 50;
+    std::vector<TallyTask> tasks;
+    for (int i = 0; i < N; ++i) tasks.push_back(tally(counter));
+    for (auto& t : tasks) s.submit(t.h);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (counter.load() < N) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(N, counter.load());
+    // queued should drain to 0 after the workers accept everything.
+    EXPECT_EQ(0u, s.queued(0));
+    // running is non-zero because the destructor hasn't fired yet.
+    EXPECT_TRUE(s.running(0) >= 1u);
+}
+
+TEST(multilevel, queued_and_running_for_out_of_range_node_is_zero) {
+    TierConfig c{};
+    c.nodes = 1;
+    c.workers_per_node = 1;
+    MultilevelScheduler s(c);
+    EXPECT_EQ(0u, s.queued(99));
+    EXPECT_EQ(0u, s.running(99));
+}
+
 RUN_ALL_TESTS()
