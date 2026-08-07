@@ -324,7 +324,8 @@ CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
               $(TEST_DIR)/unit/core/irq_test \
               $(TEST_DIR)/unit/core/object_table_test \
               $(TEST_DIR)/unit/core/endpoint_test \
-              $(TEST_DIR)/unit/core/result_test
+              $(TEST_DIR)/unit/core/result_test \
+              $(TEST_DIR)/unit/core/kobject_test
 CORE_TESTS_BIN := $(addsuffix .bin,$(CORE_TESTS))
 
 $(TEST_DIR)/unit/core/io_test.bin: $(TEST_DIR)/unit/core/io_test.cpp \
@@ -359,6 +360,11 @@ $(TEST_DIR)/unit/core/endpoint_test.bin: $(TEST_DIR)/unit/core/endpoint_test.cpp
 $(TEST_DIR)/unit/core/result_test.bin: $(TEST_DIR)/unit/core/result_test.cpp \
                                       include/neuro/core/result.hpp \
                                       $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/core/kobject_test.bin: $(TEST_DIR)/unit/core/kobject_test.cpp \
+                                       include/neuro/core/kobject.hpp \
+                                       $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # Umbrella smoke test pulls in every subsystem header via neuro.hpp
