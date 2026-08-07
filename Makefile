@@ -163,6 +163,7 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
+                    $(TEST_DIR)/integration/ipc_backpressure \
                     $(TEST_DIR)/integration/net_echo \
                     $(TEST_DIR)/integration/fs_memfs
 INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
@@ -179,6 +180,14 @@ $(TEST_DIR)/integration/ipc_pingpong.bin: $(TEST_DIR)/integration/ipc_pingpong.c
                                            include/neuro/ipc/endpoint_pair.hpp \
                                            include/neuro/ipc/message.hpp \
                                            $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+# ipc_backpressure exercises the bounded queue + co_await recv +
+# timed send/recv primitives. Also header-only.
+$(TEST_DIR)/integration/ipc_backpressure.bin: $(TEST_DIR)/integration/ipc_backpressure.cpp \
+                                               include/neuro/ipc/endpoint_pair.hpp \
+                                               include/neuro/ipc/message.hpp \
+                                               $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # net_echo is header-only on the host — no NEURO_LIB_OBJS needed.
