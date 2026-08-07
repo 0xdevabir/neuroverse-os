@@ -65,6 +65,8 @@
 #include "neuro/fabric/membership.hpp"
 
 // ---- NeuroPkg -----------------------------------------------------------
+#include "neuro/pkg/digest.hpp"
+#include "neuro/pkg/sha3.hpp"
 #include "neuro/pkg/store.hpp"
 
 // ---- NeuroJIT -----------------------------------------------------------

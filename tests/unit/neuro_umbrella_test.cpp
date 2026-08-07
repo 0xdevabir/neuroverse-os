@@ -142,6 +142,36 @@ TEST(umbrella, pkg_digest_aliases) {
     EXPECT_EQ(static_cast<std::size_t>(64), d.size());
 }
 
+TEST(umbrella, pkg_sha3_reachable) {
+    // SHA3-512 of empty input == known FIPS-202 test vector:
+    //   a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6...
+    std::span<const std::byte> empty{};
+    auto h = neuro::pkg::sha3::sha3_512(empty);
+    EXPECT_EQ(static_cast<std::size_t>(64), h.size());
+    EXPECT_EQ(static_cast<std::uint8_t>(0xa6),
+              static_cast<std::uint8_t>(h[0]));
+}
+
+TEST(umbrella, pkg_sha3_256_reachable) {
+    std::span<const std::byte> empty{};
+    auto h = neuro::pkg::sha3::sha3_256(empty);
+    EXPECT_EQ(static_cast<std::size_t>(32), h.size());
+    // First byte of the empty-input SHA3-256 digest is 0xa7
+    //   (FIPS-202 reference vector).
+    EXPECT_EQ(static_cast<std::uint8_t>(0xa7),
+              static_cast<std::uint8_t>(h[0]));
+}
+
+TEST(umbrella, pkg_store_reachable) {
+    // Verify the Store class type is reachable through the umbrella.
+    // We can't instantiate it here (the only concrete backend lives
+    // in src/pkg/store.cpp as HostStore); we just want to know the
+    // type is visible to anyone who includes neuro.hpp.
+    using neuro::pkg::Store;
+    static_assert(!std::is_default_constructible_v<Store>,
+                  "Store is abstract; only concrete backends exist");
+}
+
 // ---- NeuroJIT ----------------------------------------------------------
 
 TEST(umbrella, jit_targets_reachable) {
