@@ -34,6 +34,60 @@ TEST(page_table, page_constants) {
     EXPECT_EQ(static_cast<std::size_t>(12),        neuro::mem::kPageBits);
 }
 
+// Z4.6: huge/giant page constants.
+TEST(page_table, huge_and_giant_page_constants) {
+    EXPECT_EQ(static_cast<std::size_t>(21),       neuro::mem::kHugePageBits);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x200000ULL),
+              neuro::mem::kHugePageSize);    // 2 MiB
+    EXPECT_EQ(static_cast<std::size_t>(30),       neuro::mem::kGiantPageBits);
+    EXPECT_EQ(static_cast<std::uint64_t>(0x40000000ULL),
+              neuro::mem::kGiantPageSize);   // 1 GiB
+}
+
+// Z4.5: dirty/accessed bits observable.
+TEST(page_table, dirty_and_accessed_bits_clear_after_map) {
+    RadixPageTable pt;
+    pt.map(0x4000, 0x12345000ULL, PagePerm::Read | PagePerm::Write);
+    auto pte = pt.lookup(0x4000);
+    EXPECT_TRUE(pte.has_value());
+    EXPECT_FALSE(pte->dirty);
+    EXPECT_FALSE(pte->accessed);
+}
+
+TEST(page_table, mark_accessed_sets_accessed_bit) {
+    RadixPageTable pt;
+    pt.map(0x4000, 0x12345000ULL, PagePerm::Read);
+    EXPECT_TRUE(pt.mark_accessed(0x4000));
+    auto pte = pt.lookup(0x4000);
+    EXPECT_TRUE(pte->accessed);
+    EXPECT_FALSE(pte->dirty);  // unaffected
+}
+
+TEST(page_table, mark_dirty_sets_dirty_bit) {
+    RadixPageTable pt;
+    pt.map(0x4000, 0x12345000ULL, PagePerm::Write);
+    EXPECT_TRUE(pt.mark_dirty(0x4000));
+    auto pte = pt.lookup(0x4000);
+    EXPECT_TRUE(pte->dirty);
+    EXPECT_FALSE(pte->accessed);  // unaffected
+}
+
+TEST(page_table, mark_ops_on_unmapped_page_returns_false) {
+    RadixPageTable pt;
+    EXPECT_FALSE(pt.mark_accessed(0x5000));
+    EXPECT_FALSE(pt.mark_dirty(0x5000));
+}
+
+TEST(page_table, mark_ops_rounds_to_page_base) {
+    RadixPageTable pt;
+    pt.map(0x4000, 0x12345000ULL, PagePerm::Read);
+    EXPECT_TRUE(pt.mark_accessed(0x4123));   // intra-page offset
+    EXPECT_TRUE(pt.mark_dirty(0x4ABC));
+    auto pte = pt.lookup(0x4000);
+    EXPECT_TRUE(pte->accessed);
+    EXPECT_TRUE(pte->dirty);
+}
+
 TEST(page_table, page_base_and_offset) {
     EXPECT_EQ(static_cast<std::uint64_t>(0x0000),
               PageTable::page_base(0x0123));

@@ -80,6 +80,14 @@ public:
     // host; the kernel implementation issues INVLPG / TLBI.
     virtual void flush(std::uint64_t /*vaddr*/) noexcept {}
 
+    // Mark the page containing `vaddr` as accessed (CPU read). Returns
+    // true if a mapping was found and the bit was set. Idempotent.
+    virtual bool mark_accessed(std::uint64_t vaddr) noexcept = 0;
+
+    // Mark the page containing `vaddr` as dirty (CPU wrote). Returns
+    // true if a mapping was found and the bit was set. Idempotent.
+    virtual bool mark_dirty(std::uint64_t vaddr) noexcept = 0;
+
     // Convenience: round vaddr down to the page boundary.
     [[nodiscard]] static std::uint64_t page_base(std::uint64_t v) noexcept {
         return v & ~kPageMask;
@@ -126,6 +134,20 @@ public:
 
     [[nodiscard]] std::size_t size() const noexcept override {
         return entries_.size();
+    }
+
+    bool mark_accessed(std::uint64_t vaddr) noexcept override {
+        auto it = entries_.find(page_base(vaddr));
+        if (it == entries_.end()) return false;
+        it->second.accessed = true;
+        return true;
+    }
+
+    bool mark_dirty(std::uint64_t vaddr) noexcept override {
+        auto it = entries_.find(page_base(vaddr));
+        if (it == entries_.end()) return false;
+        it->second.dirty = true;
+        return true;
     }
 
 private:
