@@ -617,7 +617,8 @@ INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/boot_sign_verify \
                     $(TEST_DIR)/integration/jit_bridge \
                     $(TEST_DIR)/integration/audio_region \
-                    $(TEST_DIR)/integration/fabric_processes
+                    $(TEST_DIR)/integration/fabric_processes \
+                    $(TEST_DIR)/integration/proof_ipc
 INTEGRATION_TESTS_BIN := $(addsuffix .bin,$(INTEGRATION_TESTS))
 
 $(TEST_DIR)/integration/sched_steal.bin: $(TEST_DIR)/integration/sched_steal.cpp \
@@ -771,6 +772,13 @@ $(TEST_DIR)/integration/fabric_processes.bin: $(TEST_DIR)/integration/fabric_pro
                                                 neuro_fabric.o \
                                                 $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_fabric.o -o $@
+
+# proof_ipc is header-only on the host — no NEURO_LIB_OBJS needed.
+$(TEST_DIR)/integration/proof_ipc.bin: $(TEST_DIR)/integration/proof_ipc.cpp \
+                                        include/neuro/ipc/message.hpp \
+                                        include/neuro/proof/contract.hpp \
+                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(FS_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(IPC_TESTS_BIN) $(UMBRELLA_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(JIT_TESTS_BIN) $(LEARN_TESTS_BIN) $(PULSE_TESTS_BIN) $(FABRIC_TESTS_BIN) $(BRIDGE_TESTS_BIN) $(UI_TESTS_BIN) $(AUDIO_TESTS_BIN) $(PROC_TESTS_BIN) $(PROOF_TESTS_BIN) $(DEV_TESTS_BIN) $(FS_TESTS_BIN) $(SCHED_TESTS_BIN) $(CORE_TESTS_BIN) $(NET_TESTS_BIN) $(IPC_TESTS_BIN) $(UMBRELLA_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
