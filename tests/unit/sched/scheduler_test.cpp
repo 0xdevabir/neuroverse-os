@@ -19,6 +19,7 @@
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <thread>
 #include <vector>
 
@@ -214,6 +215,84 @@ TEST(scheduler, parallel_workers_share_load) {
     }
     EXPECT_EQ(N, done.load());
     EXPECT_TRUE(peak.load() >= 1);
+}
+
+// ---- 6. post_batch from a contiguous range (Z5.3) -----------
+
+TEST(scheduler, post_batch_runs_every_handle) {
+    Scheduler s(2);
+    std::atomic<int> counter{0};
+    constexpr int N = 100;
+
+    std::vector<OneShotTask> tasks;
+    tasks.reserve(N);
+    for (int i = 0; i < N; ++i) {
+        tasks.push_back(make_increment(&counter));
+    }
+
+    // Collect raw handles and post as a batch.
+    std::vector<std::coroutine_handle<>> hs;
+    hs.reserve(N);
+    for (auto& t : tasks) hs.push_back(t.h);
+    s.post_batch(hs.begin(), hs.end());
+
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::seconds(2);
+    while (counter.load() < N) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(N, counter.load());
+}
+
+TEST(scheduler, post_batch_initializer_list) {
+    Scheduler s(1);
+    std::atomic<int> counter{0};
+
+    std::vector<OneShotTask> ts;
+    ts.push_back(make_increment(&counter));
+    ts.push_back(make_increment(&counter));
+    ts.push_back(make_increment(&counter));
+    s.post_batch({ts[0].h, ts[1].h, ts[2].h});
+
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::seconds(2);
+    while (counter.load() < 3) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(3, counter.load());
+}
+
+TEST(scheduler, post_batch_empty_range_is_noop) {
+    Scheduler s(2);
+    std::vector<std::coroutine_handle<>> empty;
+    s.post_batch(empty.begin(), empty.end());   // must not crash
+    EXPECT_EQ(2u, s.worker_count());
+}
+
+// ---- 7. worker_thread_ids (Z5.4) ------------------------------
+
+TEST(scheduler, worker_thread_ids_count_matches_workers) {
+    Scheduler s(4);
+    auto ids = s.worker_thread_ids();
+    EXPECT_EQ(4u, ids.size());
+    // All ids must be distinct.
+    std::set<std::thread::id> uniq(ids.begin(), ids.end());
+    EXPECT_EQ(4u, uniq.size());
+}
+
+TEST(scheduler, worker_thread_ids_default_count_matches_hardware) {
+    Scheduler s;  // hardware_concurrency
+    auto ids = s.worker_thread_ids();
+    EXPECT_EQ(s.worker_count(), ids.size());
+}
+
+TEST(scheduler, worker_thread_ids_differ_from_caller) {
+    Scheduler s(2);
+    auto caller = std::this_thread::get_id();
+    auto ids = s.worker_thread_ids();
+    for (auto id : ids) EXPECT_TRUE(id != caller);
 }
 
 RUN_ALL_TESTS()

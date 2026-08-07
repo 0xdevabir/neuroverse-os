@@ -46,6 +46,10 @@ public:
         }
     }
 
+    [[nodiscard]] std::thread::id thread_id() const noexcept {
+        return thread_.get_id();
+    }
+
 private:
     void run() {
         while (true) {
@@ -92,6 +96,37 @@ public:
         // Round-robin for simplicity.
         auto& w = *workers_[next_++ % workers_.size()];
         w.post(h);
+    }
+
+    // Batch post: enqueue a contiguous range of handles under one
+    // round-robin counter advance. Each handle still receives its own
+    // worker assignment; the batch path is mostly a convenience for
+    // callers that want a single call site.
+    template <class It>
+    void post_batch(It first, It last) {
+        for (auto it = first; it != last; ++it) {
+            post(*it);
+        }
+    }
+
+    // Overload for std::initializer_list.
+    void post_batch(std::initializer_list<std::coroutine_handle<>> hs) {
+        for (auto h : hs) post(h);
+    }
+
+    // Return the std::thread::id of each worker thread. Useful for
+    // tests verifying that work actually lands on a specific worker.
+    [[nodiscard]] std::vector<std::thread::id> worker_thread_ids() const {
+        std::vector<std::thread::id> ids;
+        ids.reserve(workers_.size());
+        for (const auto& w : workers_) {
+            // Workers store a std::thread; expose its id via a friend
+            // accessor (declared in the cpp-free header by reaching
+            // into the worker thread handle). Since Worker keeps
+            // thread_ private, we add a thread_id() accessor below.
+            ids.push_back(w->thread_id());
+        }
+        return ids;
     }
 
     std::size_t worker_count() const noexcept { return workers_.size(); }
