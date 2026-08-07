@@ -54,6 +54,32 @@ public:
         return endpoints_.back();
     }
 
+    // Record a thread in this process's owned list. Returns the index
+    // of the new entry so the caller can look it up later. The process
+    // does not own the Thread (caller is responsible for its lifetime),
+    // so the slot becomes dangling once the Thread dies; clear it via
+    // remove_thread() to keep the list coherent.
+    [[nodiscard]] std::size_t add_thread(class Thread* t) {
+        threads_.push_back(t);
+        return threads_.size() - 1;
+    }
+
+    // Drop a thread slot by index; subsequent add_thread() calls reuse
+    // freed slots.
+    void remove_thread(std::size_t idx) noexcept {
+        if (idx < threads_.size()) threads_[idx] = nullptr;
+    }
+
+    [[nodiscard]] std::size_t thread_count() const noexcept {
+        std::size_t n = 0;
+        for (auto* t : threads_) if (t) ++n;
+        return n;
+    }
+
+    [[nodiscard]] class Thread* thread_at(std::size_t idx) const noexcept {
+        return idx < threads_.size() ? threads_[idx] : nullptr;
+    }
+
 private:
     ProcessInit                           init_;
     neuro::sec::CapabilitySpace           caps_;
@@ -61,6 +87,7 @@ private:
     neuro::mem::VMATree                   vmas_;
     std::vector<core::Endpoint*>          endpoints_;
     std::vector<std::unique_ptr<core::Endpoint>> owned_;
+    std::vector<class Thread*>            threads_;
 };
 
 }  // namespace neuro::proc

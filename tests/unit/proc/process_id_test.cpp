@@ -17,6 +17,7 @@
 #include "neuro/core/kobject.hpp"
 #include "neuro/mem/vma_tree.hpp"
 #include "neuro/proc/process.hpp"
+#include "neuro/proc/thread.hpp"
 #include "neuro/sec/cap_space.hpp"
 #include "neuro/sec/epoch.hpp"
 
@@ -123,6 +124,43 @@ TEST(process, owned_endpoint_lifetime) {
     p.add_endpoint(std::make_unique<Endpoint>());
     p.add_endpoint(std::make_unique<Endpoint>());
     EXPECT_EQ(3u, p.endpoints().size());
+}
+
+// ---- 7. Process::add_thread bookkeeping ----------------------------
+
+TEST(process, add_thread_records_index_and_pointer) {
+    using neuro::proc::Thread;
+    Process p(ProcessInit{"tp", {}});
+    EXPECT_EQ(0u, p.thread_count());
+
+    Thread::Attr a;
+    Thread t1(p, a, [](Thread&) {});
+    Thread t2(p, a, [](Thread&) {});
+    const auto i1 = p.add_thread(&t1);
+    const auto i2 = p.add_thread(&t2);
+    EXPECT_EQ(0u, i1);
+    EXPECT_EQ(1u, i2);
+    EXPECT_EQ(2u, p.thread_count());
+    EXPECT_EQ(&t1, p.thread_at(i1));
+    EXPECT_EQ(&t2, p.thread_at(i2));
+}
+
+TEST(process, remove_thread_clears_slot) {
+    using neuro::proc::Thread;
+    Process p(ProcessInit{"tp2", {}});
+    Thread::Attr a;
+    Thread t(p, a, [](Thread&) {});
+    const auto idx = p.add_thread(&t);
+    EXPECT_EQ(1u, p.thread_count());
+    p.remove_thread(idx);
+    EXPECT_EQ(0u, p.thread_count());
+    EXPECT_TRUE(p.thread_at(idx) == nullptr);
+}
+
+TEST(process, thread_at_out_of_range_returns_null) {
+    Process p(ProcessInit{"tp3", {}});
+    EXPECT_TRUE(p.thread_at(0) == nullptr);
+    EXPECT_TRUE(p.thread_at(99) == nullptr);
 }
 
 RUN_ALL_TESTS()

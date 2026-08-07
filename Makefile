@@ -397,18 +397,19 @@ $(TEST_DIR)/unit/proc/process_test.bin: $(TEST_DIR)/unit/proc/process_test.cpp \
                                        include/neuro/proc/process.hpp \
                                        neuro_process.o \
                                        $(TEST_DIR)/test_framework.hpp
-	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_process.o -o $@
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_process.o neuro_thread.o -o $@
 
 $(TEST_DIR)/unit/proc/process_id_test.bin: $(TEST_DIR)/unit/proc/process_id_test.cpp \
                                            include/neuro/proc/process.hpp \
+                                           include/neuro/proc/thread.hpp \
                                            include/neuro/sec/cap_space.hpp \
                                            include/neuro/sec/epoch.hpp \
                                            include/neuro/mem/vma_tree.hpp \
                                            include/neuro/core/endpoint.hpp \
                                            include/neuro/core/kobject.hpp \
-                                           neuro_process.o \
+                                           neuro_process.o neuro_thread.o \
                                            $(TEST_DIR)/test_framework.hpp
-	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_process.o -o $@
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_process.o neuro_thread.o -o $@
 
 # core/io tests are header-only.
 CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
