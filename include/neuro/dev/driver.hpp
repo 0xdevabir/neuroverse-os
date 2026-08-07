@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -103,5 +104,9 @@ public:
 
 // Singleton-ish factory for the host bus.
 Bus& host_bus();
+
+// Test-only factory: build a fresh, isolated Bus. Tests should
+// use this instead of host_bus() so they don't share state.
+std::unique_ptr<Bus> make_test_bus();
 
 }  // namespace neuro::dev

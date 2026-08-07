@@ -10,8 +10,6 @@
 
 namespace neuro::dev {
 
-namespace {
-
 class HostBus : public Bus {
 public:
     void register_driver(Driver* d) override {
@@ -42,13 +40,13 @@ private:
     std::vector<Driver*> drivers_;  // non-owning
 };
 
-HostBus& host_bus_singleton() {
+Bus& host_bus() {
     static HostBus b;
     return b;
 }
 
-}  // namespace
-
-Bus& host_bus() { return host_bus_singleton(); }
+std::unique_ptr<Bus> make_test_bus() {
+    return std::make_unique<HostBus>();
+}
 
 }  // namespace neuro::dev
