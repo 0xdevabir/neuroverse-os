@@ -7,6 +7,7 @@
 #include "neuro/core/log.hpp"
 
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -158,6 +159,111 @@ TEST(log, no_fields_compiles_clean) {
     NEURO_LOG_INFO("just-a-message");
     EXPECT_EQ(1u, g.queue_.size());
     EXPECT_TRUE(g.queue_.snapshot()[0].fields.empty());
+}
+
+// ---- Phase P2.2 — scoped sink and context -----------------------------
+
+TEST(log, scoped_sink_restores_previous_on_destruction) {
+    QueueSink outer;
+    Sink* prev = set_sink(&outer);
+    {
+        QueueSink inner;
+        ScopedLogSink guard(&inner);
+        NEURO_LOG_INFO("hello");
+        EXPECT_EQ(1u, inner.size());
+        EXPECT_EQ(0u, outer.size());
+    }
+    // Guard destroyed; outer sink must be restored.
+    NEURO_LOG_INFO("back");
+    EXPECT_EQ(1u, outer.size());
+    set_sink(prev);
+}
+
+TEST(log, scoped_log_context_attaches_field_to_records) {
+    SinkGuard g;
+    set_level(Level::Trace);
+    {
+        ScopedLogContext ctx("request_id", std::string("abc-123"));
+        NEURO_LOG_INFO("in-flight");
+        auto records = g.queue_.snapshot();
+        EXPECT_EQ(1u, records.size());
+        auto it = records[0].fields.find("request_id");
+        EXPECT_TRUE(it != records[0].fields.end());
+        EXPECT_EQ(std::string("abc-123"),
+                  std::get<std::string>(it->second));
+    }
+    // Context restored; subsequent records must NOT carry the field.
+    NEURO_LOG_INFO("after");
+    auto records = g.queue_.snapshot();
+    EXPECT_EQ(2u, records.size());
+    EXPECT_TRUE(records[1].fields.find("request_id") ==
+                records[1].fields.end());
+}
+
+TEST(log, scoped_log_context_restores_on_exception) {
+    SinkGuard g;
+    set_level(Level::Trace);
+    try {
+        ScopedLogContext ctx("phase", std::string("test"));
+        throw std::runtime_error("boom");
+    } catch (...) {
+        // Swallow.
+    }
+    NEURO_LOG_INFO("after-throw");
+    auto records = g.queue_.snapshot();
+    EXPECT_EQ(1u, records.size());
+    EXPECT_TRUE(records[0].fields.find("phase") ==
+                records[0].fields.end());
+}
+
+TEST(log, scoped_log_context_nested_layers) {
+    SinkGuard g;
+    set_level(Level::Trace);
+    {
+        ScopedLogContext outer("a", 1LL);
+        {
+            ScopedLogContext inner("b", 2LL);
+            NEURO_LOG_INFO("nested");
+        }
+        NEURO_LOG_INFO("after-inner");
+    }
+    NEURO_LOG_INFO("after-outer");
+    auto records = g.queue_.snapshot();
+    EXPECT_EQ(3u, records.size());
+
+    // First record has both fields.
+    auto& r0 = records[0].fields;
+    EXPECT_TRUE(r0.find("a") != r0.end());
+    EXPECT_TRUE(r0.find("b") != r0.end());
+
+    // Second has only "a".
+    auto& r1 = records[1].fields;
+    EXPECT_TRUE(r1.find("a") != r1.end());
+    EXPECT_TRUE(r1.find("b") == r1.end());
+
+    // Third has neither.
+    auto& r2 = records[2].fields;
+    EXPECT_TRUE(r2.find("a") == r2.end());
+    EXPECT_TRUE(r2.find("b") == r2.end());
+}
+
+TEST(log, scoped_log_context_combines_with_explicit_fields) {
+    SinkGuard g;
+    set_level(Level::Trace);
+    {
+        ScopedLogContext ctx("trace", std::string("yes"));
+        NEURO_LOG_INFO("combo", NEURO_FIELD("count", 7LL));
+    }
+    auto records = g.queue_.snapshot();
+    EXPECT_EQ(1u, records.size());
+    auto& fields = records[0].fields;
+    EXPECT_EQ(2u, fields.size());
+    auto it = fields.find("trace");
+    EXPECT_TRUE(it != fields.end());
+    EXPECT_EQ(std::string("yes"), std::get<std::string>(it->second));
+    it = fields.find("count");
+    EXPECT_TRUE(it != fields.end());
+    EXPECT_EQ(7LL, std::get<long long>(it->second));
 }
 
 RUN_ALL_TESTS()

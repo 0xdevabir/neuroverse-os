@@ -1,6 +1,7 @@
 // neuro/core/log.hpp
 //
 // Phase P2.1 — structured logging primitives.
+// Phase P2.2 — scoped sink and context RAII helpers.
 //
 // A small, dependency-free logging facility. Key properties:
 //
@@ -11,7 +12,9 @@
 //     Tests can substitute a QueueSink for deterministic capture.
 //   * No background thread by default. Sinks run on the thread that
 //     produced the record; flush() is synchronous.
-//   * RAII sink/context isolation is added in P2.2.
+//   * ScopedLogSink isolates output redirection.
+//   * ScopedLogContext attaches thread-local fields to every record
+//     emitted inside the scope.
 //
 // Use:
 //   NEURO_LOG_INFO("server ready");
@@ -228,6 +231,57 @@ inline Record with_fields(Record record, Fields&&... fields) {
     return record;
 }
 
+// ---- Phase P2.2 — scoped sink and context -----------------------------
+
+class ScopedLogSink {
+public:
+    explicit ScopedLogSink(Sink* sink) noexcept
+        : previous_(set_sink(sink)) {}
+    ~ScopedLogSink() { set_sink(previous_); }
+    ScopedLogSink(const ScopedLogSink&)            = delete;
+    ScopedLogSink& operator=(const ScopedLogSink&) = delete;
+
+private:
+    Sink* previous_;
+};
+
+class ScopedLogContext {
+public:
+    explicit ScopedLogContext(std::string key, FieldValue value)
+        : previous_count_(context_stack().size()) {
+        context_stack().emplace_back(std::move(key), std::move(value));
+    }
+    ~ScopedLogContext() {
+        // Restore previous size even if other ScopedLogContexts were
+        // pushed inside this scope. We do not free the popped records
+        // because the underlying vector storage persists for the
+        // thread's lifetime; only the size is restored.
+        if (context_stack().size() > previous_count_) {
+            context_stack().resize(previous_count_);
+        }
+    }
+    ScopedLogContext(const ScopedLogContext&)            = delete;
+    ScopedLogContext& operator=(const ScopedLogContext&) = delete;
+
+    // Internal accessor; storage remains thread-local to the calling
+    // thread and is never shared between producers.
+    static std::vector<std::pair<std::string, FieldValue>>&
+    context_stack() {
+        thread_local std::vector<std::pair<std::string, FieldValue>> stack;
+        return stack;
+    }
+
+private:
+    std::size_t previous_count_;
+};
+
+inline Record with_context(Record record) {
+    for (const auto& [k, v] : ScopedLogContext::context_stack()) {
+        record.fields[k] = v;
+    }
+    return record;
+}
+
 }  // namespace neuro::core::log
 
 // ---- Macros ------------------------------------------------------------
@@ -244,6 +298,8 @@ inline Record with_fields(Record record, Fields&&... fields) {
             std::source_location::current());                               \
         __neuro_record = ::neuro::core::log::with_fields(                   \
             std::move(__neuro_record) __VA_OPT__(,) __VA_ARGS__);            \
+        __neuro_record = ::neuro::core::log::with_context(                  \
+            std::move(__neuro_record));                                     \
         ::neuro::core::log::emit(std::move(__neuro_record));                \
     } while (0)
 
