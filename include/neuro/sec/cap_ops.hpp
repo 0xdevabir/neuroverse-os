@@ -118,6 +118,19 @@ public:
         return out;
     }
 
+    // Explicit move primitive — transfers a capability from `src` to
+    // `dst` and erases the source handle. Source must hold the Grant
+    // right. This is a thin alias for grant(..., take=true) but is
+    // clearer at the call site.
+    [[nodiscard]] static GrantResult move(CapabilitySpace& src,
+                                         CapabilitySpace& dst,
+                                         CapEpoch& src_epoch,
+                                         std::uint64_t src_handle,
+                                         neuro::core::CapRight narrower =
+                                             neuro::core::CapRight::None) {
+        return grant(src, dst, src_epoch, src_handle, narrower, /*take=*/true);
+    }
+
     // Revoke every capability in `space` by bumping the epoch. After
     // this call, every previously-resolved capability returns nullopt
     // from resolve().

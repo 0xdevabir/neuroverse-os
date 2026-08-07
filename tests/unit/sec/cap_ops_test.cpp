@@ -297,4 +297,33 @@ TEST(cap_ops, duplicate_unknown_handle_fails) {
     EXPECT_FALSE(r.ok);
 }
 
+// ---- 6. move (alias for grant with take=true) ---------------------
+
+TEST(cap_ops, move_transfers_and_erases_source) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, kAll, /*gen=*/1);
+
+    const auto r = CapOps::move(src, dst, epoch, h_src);
+    EXPECT_TRUE(r.ok);
+    EXPECT_TRUE(r.handle != neuro::sec::kInvalidHandle);
+    EXPECT_FALSE(src.contains(h_src));
+    EXPECT_TRUE(dst.contains(r.handle));
+}
+
+TEST(cap_ops, move_requires_grant_right) {
+    CapabilitySpace src;
+    CapabilitySpace dst;
+    CapEpoch        epoch;
+    // Read-only source — move must fail.
+    const auto h_src =
+        CapOps::mint(src, epoch, kObj, CapRight::Read, /*gen=*/1);
+
+    const auto r = CapOps::move(src, dst, epoch, h_src);
+    EXPECT_FALSE(r.ok);
+    EXPECT_TRUE(src.contains(h_src));  // unchanged
+}
+
 RUN_ALL_TESTS()
