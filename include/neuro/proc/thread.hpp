@@ -84,6 +84,10 @@ public:
     [[nodiscard]] std::uint8_t      priority() const noexcept { return attr_.priority; }
     [[nodiscard]] Process&          owner()    const noexcept { return *owner_; }
 
+    // Live priority update for the host scheduler. Lower = higher
+    // priority. No effect on the kernel scheduler in Phase 1.
+    void set_priority(std::uint8_t p) noexcept { attr_.priority = p; }
+
     // Capability view onto the thread: anyone holding this with
     // CapRight::Signal may wake() it.
     [[nodiscard]] neuro::sec::CapabilitySpace& caps() noexcept;

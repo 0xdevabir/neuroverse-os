@@ -457,4 +457,40 @@ TEST(thread, wake_from_many_threads_concurrently) {
     t.join();
 }
 
+// ---- 18. set_priority() live update -------------------------------
+
+TEST(thread, set_priority_updates_priority) {
+    Process p(ProcessInit{"p24", {}});
+    Thread::Attr a;
+    a.priority = 100;
+    Thread t(p, a, inc_thread);
+    EXPECT_EQ(100, t.priority());
+    t.set_priority(7);
+    EXPECT_EQ(7, t.priority());
+    t.set_priority(0);
+    EXPECT_EQ(0, t.priority());
+    t.set_priority(255);
+    EXPECT_EQ(255, t.priority());
+}
+
+TEST(thread, set_priority_during_running_is_safe) {
+    Process p(ProcessInit{"p25", {}});
+    Thread::Attr a;
+    a.priority = 100;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    t.set_priority(50);
+    EXPECT_EQ(50, t.priority());
+    stop.store(true);
+    t.join();
+}
+
 RUN_ALL_TESTS()
