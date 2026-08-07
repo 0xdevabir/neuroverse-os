@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <vector>
 
 #include "neuro/core/kobject.hpp"
 
