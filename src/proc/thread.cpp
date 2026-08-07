@@ -43,14 +43,8 @@ void Thread::join() {
 }
 
 bool Thread::join_for(std::chrono::milliseconds d) {
-    // std::thread doesn't have timeout join; run a small helper that
-    // signals via a future.
+    // std::thread doesn't have a real timeout-join; we poll done_.
     if (!os_thread_.joinable()) return true;
-    std::thread helper([this] {
-        if (os_thread_.joinable()) os_thread_.join();
-    });
-    // Polling join is acceptable for the host stub; the kernel version
-    // would simply block on the thread's completion.
     auto deadline = std::chrono::steady_clock::now() + d;
     while (!done_.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {
