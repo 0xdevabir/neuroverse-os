@@ -67,6 +67,47 @@ public:
         return send_awaiter{this, std::move(m)};
     }
 
+    // ---- Async receive ------------------------------------------------
+
+    struct recv_awaiter {
+        Endpoint*              ep;
+        std::optional<Message> result;
+        std::coroutine_handle<> continuation{};
+
+        // Fast path: consume an already-queued message without
+        // suspending the coroutine.
+        bool await_ready() {
+            std::lock_guard lk(ep->mu_);
+            if (ep->queue_.empty()) return false;
+            result.emplace(std::move(ep->queue_.front()));
+            ep->queue_.pop_front();
+            return true;
+        }
+
+        // Slow path: atomically re-check the queue, then register this
+        // awaiter as a receiver. send_nowait() fills `result` and resumes
+        // `continuation` once a message arrives.
+        bool await_suspend(std::coroutine_handle<> h) {
+            std::lock_guard lk(ep->mu_);
+            if (!ep->queue_.empty()) {
+                result.emplace(std::move(ep->queue_.front()));
+                ep->queue_.pop_front();
+                return false;  // message raced with await_ready()
+            }
+            continuation = h;
+            ep->waiters_.push_back(this);
+            return true;
+        }
+
+        Message await_resume() {
+            return std::move(*result);
+        }
+    };
+
+    [[nodiscard]] recv_awaiter recv() {
+        return recv_awaiter{this, std::nullopt, {}};
+    }
+
     // ---- Synchronous receive (host scaffold) --------------------------
 
     [[nodiscard]] std::optional<Message> try_recv() {
@@ -95,13 +136,26 @@ public:
     // ---- Internal -----------------------------------------------------
 
     void send_nowait(Message m) {
-        std::lock_guard lk(mu_);
-        queue_.push_back(std::move(m));
+        std::coroutine_handle<> resume = {};
+        recv_awaiter* waiter = nullptr;
+        {
+            std::lock_guard lk(mu_);
+            if (!waiters_.empty()) {
+                waiter = waiters_.front();
+                waiters_.pop_front();
+                resume = waiter->continuation;
+                waiter->result.emplace(std::move(m));
+            } else {
+                queue_.push_back(std::move(m));
+            }
+        }
+        if (resume) resume.resume();
     }
 
 private:
     mutable std::mutex                mu_;
     std::deque<Message>               queue_;
+    std::deque<recv_awaiter*>         waiters_;
 };
 
 }  // namespace neuro::ipc

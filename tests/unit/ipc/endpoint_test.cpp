@@ -229,4 +229,80 @@ TEST(ipc_endpoint, co_await_send_queues_message) {
     EXPECT_TRUE(m->tag == Tag(9, 10));
 }
 
+// ---- 8. recv_awaiter (co_await ep.recv()) ----------------------
+
+namespace {
+
+struct RecvTask {
+    struct promise_type {
+        Endpoint* ep = nullptr;
+        Message   msg;
+
+        RecvTask get_return_object() noexcept {
+            return RecvTask{
+                std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+        std::suspend_always initial_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void return_void() noexcept {}
+        void unhandled_exception() noexcept { std::terminate(); }
+    };
+    std::coroutine_handle<promise_type> h;
+    RecvTask(std::coroutine_handle<promise_type> handle) noexcept : h(handle) {}
+    ~RecvTask() { if (h) h.destroy(); }
+};
+
+RecvTask co_recv(Endpoint& ep, std::atomic<int>* done) {
+    auto m = co_await ep.recv();
+    done->store(static_cast<int>(m.payload.size()));
+    co_return;
+}
+
+}  // namespace
+
+TEST(ipc_endpoint, recv_awaiter_resumes_on_send) {
+    Endpoint ep;
+    std::atomic<int> done{-1};
+    auto task = co_recv(ep, &done);
+
+    // Suspend: queue is empty, awaiter parks.
+    task.h.resume();
+    EXPECT_EQ(-1, done.load());
+
+    // A send unblocks the awaiter.
+    ep.send_nowait(Message(Tag(1, 2), bytes({0x42, 0x43, 0x44, 0x45})));
+    EXPECT_EQ(4, done.load());
+}
+
+TEST(ipc_endpoint, recv_awaiter_fast_path_consumes_existing_message) {
+    Endpoint ep;
+    ep.send_nowait(Message(Tag(1, 2), bytes({0x11})));
+    std::atomic<int> done{-1};
+    auto task = co_recv(ep, &done);
+    task.h.resume();      // never suspends — message already present
+    EXPECT_EQ(1, done.load());
+    EXPECT_EQ(static_cast<std::size_t>(0), ep.size());
+}
+
+TEST(ipc_endpoint, recv_awaiter_receives_multiple_messages_in_order) {
+    // Two receivers park on the same endpoint; two sends unblock them
+    // in FIFO order.
+    Endpoint ep;
+    std::atomic<int> a_done{-1};
+    std::atomic<int> b_done{-1};
+    auto task_a = co_recv(ep, &a_done);
+    auto task_b = co_recv(ep, &b_done);
+    task_a.h.resume();
+    task_b.h.resume();
+    EXPECT_EQ(-1, a_done.load());
+    EXPECT_EQ(-1, b_done.load());
+
+    ep.send_nowait(Message(Tag(0, 0), bytes({0xAA})));
+    EXPECT_EQ(1, a_done.load());
+    EXPECT_EQ(-1, b_done.load());
+
+    ep.send_nowait(Message(Tag(0, 1), bytes({0xBB, 0xCC})));
+    EXPECT_EQ(2, b_done.load());
+}
+
 RUN_ALL_TESTS()
