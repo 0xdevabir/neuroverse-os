@@ -353,4 +353,44 @@ TEST(scheduler, is_cancelled_returns_state) {
     EXPECT_TRUE(s.is_cancelled(t.h));
 }
 
+// ---- 9. worker idle/busy counters (Z5.7) -------------------------
+
+TEST(scheduler, idle_busy_counters_track_activity) {
+    Scheduler s(2);
+    std::atomic<int> counter{0};
+
+    // Both workers should reach idle=1 quickly (no work posted yet).
+    auto deadline = std::chrono::steady_clock::now() +
+                    std::chrono::seconds(2);
+    while (s.idle_count() < 2) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(2u, s.idle_count());
+    EXPECT_EQ(0u, s.busy_count());
+
+    constexpr int N = 32;
+    std::vector<OneShotTask> tasks;
+    for (int i = 0; i < N; ++i) {
+        tasks.push_back(make_increment(&counter));
+        s.post(tasks.back().h);
+    }
+
+    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (counter.load() < N) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(N, counter.load());
+    EXPECT_EQ(N, s.completed_count());
+    // After draining, workers return to idle.
+    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (s.idle_count() < 2) {
+        if (std::chrono::steady_clock::now() > deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    EXPECT_EQ(2u, s.idle_count());
+    EXPECT_EQ(0u, s.busy_count());
+}
+
 RUN_ALL_TESTS()

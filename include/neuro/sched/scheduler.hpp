@@ -32,6 +32,13 @@ public:
     void stop();
     [[nodiscard]] std::thread::id thread_id() const noexcept;
 
+    // Live counters: idle (waiting on cv) or busy (resuming a handle).
+    [[nodiscard]] std::uint64_t idle_count() const noexcept { return idle_.load(); }
+    [[nodiscard]] std::uint64_t busy_count() const noexcept { return busy_.load(); }
+    [[nodiscard]] std::uint64_t completed_count() const noexcept {
+        return completed_.load();
+    }
+
 private:
     void run();
 
@@ -41,6 +48,9 @@ private:
     std::condition_variable             cv_;
     std::deque<std::coroutine_handle<>> queue_;
     bool                                done_{false};
+    std::atomic<std::uint64_t>          idle_{0};
+    std::atomic<std::uint64_t>          busy_{0};
+    std::atomic<std::uint64_t>          completed_{0};
 };
 
 class Scheduler {
@@ -122,6 +132,23 @@ public:
 
     std::size_t worker_count() const noexcept { return workers_.size(); }
 
+    // Aggregate metrics across workers.
+    [[nodiscard]] std::uint64_t idle_count() const noexcept {
+        std::uint64_t total = 0;
+        for (const auto& w : workers_) total += w->idle_count();
+        return total;
+    }
+    [[nodiscard]] std::uint64_t busy_count() const noexcept {
+        std::uint64_t total = 0;
+        for (const auto& w : workers_) total += w->busy_count();
+        return total;
+    }
+    [[nodiscard]] std::uint64_t completed_count() const noexcept {
+        std::uint64_t total = 0;
+        for (const auto& w : workers_) total += w->completed_count();
+        return total;
+    }
+
 private:
     std::vector<std::unique_ptr<Worker>> workers_;
     std::atomic<std::size_t>            next_{0};
@@ -163,21 +190,31 @@ inline void Worker::run() {
     while (true) {
         std::coroutine_handle<> h;
         {
+            std::lock_guard lk(mu_);
+            idle_.fetch_add(1);
+        }
+        {
             std::unique_lock lk(mu_);
             cv_.wait(lk, [&] { return !queue_.empty() || done_; });
+            idle_.fetch_sub(1);
             if (done_ && queue_.empty()) return;
             h = queue_.front();
             queue_.pop_front();
         }
+        busy_.fetch_add(1);
         // Cancellation check: if the handle was cancelled before
         // we picked it up, destroy it without resuming.
         if (sched_.is_cancelled(h)) {
             sched_.clear_cancel(h);
             h.destroy();
+            busy_.fetch_sub(1);
+            completed_.fetch_add(1);
             continue;
         }
         h.resume();
         sched_.clear_cancel(h);  // cleanup if cancel raced after pop
+        busy_.fetch_sub(1);
+        completed_.fetch_add(1);
     }
 }
 
