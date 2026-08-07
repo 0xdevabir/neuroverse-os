@@ -329,7 +329,8 @@ $(TEST_DIR)/unit/audio/pipeline_test.bin: $(TEST_DIR)/unit/audio/pipeline_test.c
 # fs/vnode tests are header-only — MemVNode is defined inline in the
 # test source itself.
 FS_TESTS := $(TEST_DIR)/unit/fs/vnode_test \
-            $(TEST_DIR)/unit/fs/vfs_test
+            $(TEST_DIR)/unit/fs/vfs_test \
+            $(TEST_DIR)/unit/fs/memfs_test
 FS_TESTS_BIN := $(addsuffix .bin,$(FS_TESTS))
 
 $(TEST_DIR)/unit/fs/vnode_test.bin: $(TEST_DIR)/unit/fs/vnode_test.cpp \
@@ -345,6 +346,15 @@ $(TEST_DIR)/unit/fs/vfs_test.bin: $(TEST_DIR)/unit/fs/vfs_test.cpp \
                                   include/neuro/core/result.hpp \
                                   $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/fs/memfs_test.bin: $(TEST_DIR)/unit/fs/memfs_test.cpp \
+                                    include/neuro/fs/memfs.hpp \
+                                    include/neuro/fs/vfs.hpp \
+                                    include/neuro/fs/vnode.hpp \
+                                    include/neuro/core/result.hpp \
+                                    neuro_memfs.o \
+                                    $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o -o $@
 
 # proc/thread tests link the Thread + Process implementations.
 PROC_TESTS := $(TEST_DIR)/unit/proc/thread_test \
