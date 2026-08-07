@@ -436,7 +436,8 @@ CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
               $(TEST_DIR)/unit/core/endpoint_test \
               $(TEST_DIR)/unit/core/result_test \
               $(TEST_DIR)/unit/core/kobject_test \
-              $(TEST_DIR)/unit/core/capability_test
+              $(TEST_DIR)/unit/core/capability_test \
+              $(TEST_DIR)/unit/core/version_test
 CORE_TESTS_BIN := $(addsuffix .bin,$(CORE_TESTS))
 
 $(TEST_DIR)/unit/core/io_test.bin: $(TEST_DIR)/unit/core/io_test.cpp \
@@ -476,6 +477,11 @@ $(TEST_DIR)/unit/core/result_test.bin: $(TEST_DIR)/unit/core/result_test.cpp \
 $(TEST_DIR)/unit/core/kobject_test.bin: $(TEST_DIR)/unit/core/kobject_test.cpp \
                                        include/neuro/core/kobject.hpp \
                                        $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/core/version_test.bin: $(TEST_DIR)/unit/core/version_test.cpp \
+                                             include/neuro/core/version.hpp \
+                                             $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 $(TEST_DIR)/unit/core/capability_test.bin: $(TEST_DIR)/unit/core/capability_test.cpp \

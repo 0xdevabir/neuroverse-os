@@ -15,6 +15,7 @@
 #include "neuro/core/capability.hpp"
 #include "neuro/core/endpoint.hpp"
 #include "neuro/core/result.hpp"
+#include "neuro/core/version.hpp"
 
 // ---- NeuroSec -----------------------------------------------------------
 #include "neuro/sec/cap_ops.hpp"
