@@ -402,4 +402,59 @@ TEST(thread, destructor_on_unstarted_thread_is_noop) {
     EXPECT_TRUE(true);
 }
 
+// ---- 17. wake() idempotence across many calls from one thread -----
+
+TEST(thread, wake_many_calls_from_one_thread) {
+    // A loop of 1000 wake() calls from a single outside thread must
+    // not deadlock or corrupt state.
+    Process p(ProcessInit{"p22", {}});
+    Thread::Attr a;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    for (int i = 0; i < 1000; ++i) t.wake();
+    EXPECT_EQ(ThreadState::Running, t.state());
+    stop.store(true);
+    t.join();
+}
+
+TEST(thread, wake_from_many_threads_concurrently) {
+    // Multiple outside threads each calling wake() in a tight loop
+    // must not corrupt state.
+    Process p(ProcessInit{"p23", {}});
+    Thread::Attr a;
+    std::atomic<bool> entered{false};
+    std::atomic<bool> stop{false};
+    Thread t(p, a, [&entered, &stop](Thread& th) {
+        entered.store(true);
+        while (!stop.load() && th.state() != ThreadState::Terminated) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    t.start();
+    while (!entered.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    constexpr int kWorkers = 4;
+    constexpr int kIters = 250;
+    std::vector<std::thread> ws;
+    for (int i = 0; i < kWorkers; ++i) {
+        ws.emplace_back([&t] {
+            for (int j = 0; j < kIters; ++j) t.wake();
+        });
+    }
+    for (auto& w : ws) w.join();
+
+    EXPECT_EQ(ThreadState::Running, t.state());
+    stop.store(true);
+    t.join();
+}
+
 RUN_ALL_TESTS()
