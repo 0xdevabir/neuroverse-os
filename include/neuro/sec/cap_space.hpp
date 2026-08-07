@@ -76,6 +76,14 @@ public:
         return n->value();
     }
 
+    // O(1)-ish membership check: returns true if `h` is bound to a
+    // Capability in this space. Useful before erase() / use() so
+    // callers don't have to look up the full Capability just to test
+    // presence.
+    [[nodiscard]] bool contains(std::uint64_t h) const noexcept {
+        return handle_in_use(h);
+    }
+
     // Remove a handle from this space. The Capability itself is returned
     // if the caller wants to pass it elsewhere (e.g. grant).
     [[nodiscard]] std::optional<Capability> erase(std::uint64_t h) {

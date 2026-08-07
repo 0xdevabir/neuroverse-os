@@ -276,4 +276,34 @@ TEST(cap_space, fill_then_bulk_erase_compacts) {
     EXPECT_TRUE(sp.node_count() < peak_nodes);
 }
 
+// ---- 10. contains() membership check -----------------------------
+
+TEST(cap_space, contains_returns_true_after_insert) {
+    CapabilitySpace sp;
+    auto h = sp.insert(make_cap(0xCAFE));
+    EXPECT_TRUE(sp.contains(h));
+}
+
+TEST(cap_space, contains_returns_false_after_erase) {
+    CapabilitySpace sp;
+    auto h = sp.insert(make_cap(0xCAFE));
+    (void)sp.erase(h);
+    EXPECT_FALSE(sp.contains(h));
+}
+
+TEST(cap_space, contains_returns_false_for_unknown_handle) {
+    CapabilitySpace sp;
+    EXPECT_FALSE(sp.contains(kInvalidHandle));
+    EXPECT_FALSE(sp.contains(0xDEADBEEFULL));
+}
+
+TEST(cap_space, contains_does_not_disturb_lookup) {
+    CapabilitySpace sp;
+    auto h = sp.insert(make_cap(7));
+    EXPECT_TRUE(sp.contains(h));
+    // Repeated contains() calls must not free the cap.
+    for (int i = 0; i < 16; ++i) EXPECT_TRUE(sp.contains(h));
+    EXPECT_TRUE(sp.lookup(h).has_value());
+}
+
 RUN_ALL_TESTS()
