@@ -22,20 +22,12 @@
 #include <string_view>
 #include <vector>
 
+#include "neuro/pkg/digest.hpp"
+
 namespace neuro::pkg {
 
 // SHA3-512 digest (64 bytes).
-using Digest = std::array<std::uint8_t, 64>;
-
-inline std::string to_hex(const Digest& d) {
-    static constexpr char kHex[] = "0123456789abcdef";
-    std::string out(d.size() * 2, '0');
-    for (std::size_t i = 0; i < d.size(); ++i) {
-        out[i * 2 + 0] = kHex[(d[i] >> 4) & 0xF];
-        out[i * 2 + 1] = kHex[d[i] & 0xF];
-    }
-    return out;
-}
+using Digest = Digest512;
 
 // One stored artifact: immutable bytes keyed by digest.
 struct Artifact {

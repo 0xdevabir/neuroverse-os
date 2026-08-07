@@ -161,7 +161,8 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
                                     include/neuro/mem/pool.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
-PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test
+PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test \
+             $(TEST_DIR)/unit/pkg/sha3_family_test
 PKG_TESTS_BIN := $(addsuffix .bin,$(PKG_TESTS))
 
 # sha3_test is header-only (sha3.hpp is inline).
@@ -169,6 +170,13 @@ $(TEST_DIR)/unit/pkg/sha3_test.bin: $(TEST_DIR)/unit/pkg/sha3_test.cpp \
                                     include/neuro/pkg/sha3.hpp \
                                     include/neuro/pkg/store.hpp \
                                     $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+# sha3_family_test covers SHA3-224/256/384/512 + SHAKE128/256.
+$(TEST_DIR)/unit/pkg/sha3_family_test.bin: $(TEST_DIR)/unit/pkg/sha3_family_test.cpp \
+                                           include/neuro/pkg/sha3.hpp \
+                                           include/neuro/pkg/digest.hpp \
+                                           $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \

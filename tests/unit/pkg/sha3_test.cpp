@@ -116,7 +116,7 @@ TEST(sha3, streaming_matches_oneshot) {
         reinterpret_cast<const std::byte*>(s.data() + 73), 1));
     h.absorb(std::span<const std::byte>(
         reinterpret_cast<const std::byte*>(s.data() + 74), s.size() - 74));
-    Digest from_stream = h.squeeze();
+    Digest from_stream = h.final();
 
     EXPECT_EQ(from_oneshot, from_stream);
 }
@@ -126,14 +126,14 @@ TEST(sha3, streaming_matches_oneshot) {
 TEST(sha3, reset_clears_state) {
     Sha3_512 h;
     h.absorb(bytes_of("abc"));
-    Digest first = h.squeeze();
+    Digest first = h.final();
     EXPECT_EQ(digest_from_hex(
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e"
         "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0"),
         first);
 
     h.reset();
-    Digest second = h.squeeze();
+    Digest second = h.final();
     // After reset, no absorb — output should match the empty-input digest.
     Digest empty = digest_from_hex(
         "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6"
@@ -181,7 +181,7 @@ TEST(sha3, exact_block_boundary) {
     Sha3_512 h;
     h.absorb(std::span<const std::byte>(
         reinterpret_cast<const std::byte*>(s.data()), s.size()));
-    Digest from_stream = h.squeeze();
+    Digest from_stream = h.final();
     EXPECT_EQ(from_oneshot, from_stream);
 }
 
