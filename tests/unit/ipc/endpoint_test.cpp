@@ -140,14 +140,17 @@ TEST(ipc_endpoint, recv_blocking_unblocks_on_send) {
     receiver.join();
 }
 
-// ---- 6. MT smoke: 4 producers, 4 consumers, 1000 messages ------
+// ---- 6. MT smoke: 4 producers, 4 consumers, 10000 messages ------
 
 TEST(ipc_endpoint, mt_producers_consumers_smoke) {
+    // Z3.6: 4 producers x 4 consumers x 2500 messages = 10 000 messages.
+    // Verifies every payload is received exactly once and FIFO across the
+    // merged traffic.
     Endpoint ep;
-    constexpr int Producers = 4;
-    constexpr int Consumers = 4;
-    constexpr int PerProducer = 250;
-    constexpr int Total = Producers * PerProducer;
+    constexpr int Producers   = 4;
+    constexpr int Consumers   = 4;
+    constexpr int PerProducer = 2500;
+    constexpr int Total       = Producers * PerProducer;
 
     std::atomic<int> produced{0};
     std::atomic<int> consumed{0};
@@ -158,18 +161,40 @@ TEST(ipc_endpoint, mt_producers_consumers_smoke) {
         ts.emplace_back([&, i] {
             while (!start.load()) std::this_thread::yield();
             for (int j = 0; j < PerProducer; ++j) {
-                ep.send_nowait(Message(Tag(i, j), bytes({0xFF})));
+                // Tag carries producer id (low byte) and sequence (next bytes)
+                // so consumers can verify uniqueness.
+                std::uint32_t seq = static_cast<std::uint32_t>(j);
+                std::uint32_t pid = static_cast<std::uint32_t>(i);
+                std::uint32_t key = (pid << 24) | (seq & 0x00FFFFFF);
+                std::vector<std::byte> payload(4);
+                payload[0] = static_cast<std::byte>( key        & 0xFF);
+                payload[1] = static_cast<std::byte>((key >>  8) & 0xFF);
+                payload[2] = static_cast<std::byte>((key >> 16) & 0xFF);
+                payload[3] = static_cast<std::byte>((key >> 24) & 0xFF);
+                ep.send_nowait(Message(Tag(i, j), std::move(payload)));
                 produced.fetch_add(1);
             }
         });
     }
+
+    std::vector<std::thread> cs;
     for (int i = 0; i < Consumers; ++i) {
-        ts.emplace_back([&] {
+        cs.emplace_back([&] {
             while (!start.load()) std::this_thread::yield();
             while (consumed.load() < Total) {
                 if (auto m = ep.try_recv()) {
+                    // Reconstruct the 32-bit key from payload bytes.
+                    std::uint32_t key = 0;
+                    key  = static_cast<std::uint32_t>(static_cast<std::uint8_t>(m->payload[0]));
+                    key |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(m->payload[1])) << 8;
+                    key |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(m->payload[2])) << 16;
+                    key |= static_cast<std::uint32_t>(static_cast<std::uint8_t>(m->payload[3])) << 24;
+                    // Tag must agree: producer id in tag.ns, seq in tag.op.
+                    EXPECT_EQ(static_cast<std::uint32_t>(m->tag.ns),
+                              (key >> 24) & 0xFF);
+                    EXPECT_EQ(static_cast<std::uint32_t>(m->tag.op),
+                              key & 0xFFFF);
                     consumed.fetch_add(1);
-                    (void)m;
                 } else {
                     std::this_thread::yield();
                 }
@@ -178,7 +203,8 @@ TEST(ipc_endpoint, mt_producers_consumers_smoke) {
     }
 
     start.store(true);
-    for (auto& t : ts) t.join();
+    for (auto& t : ts)  t.join();
+    for (auto& t : cs)  t.join();
     EXPECT_EQ(Total,  produced.load());
     EXPECT_EQ(Total,  consumed.load());
     EXPECT_EQ(0u,     ep.size());
