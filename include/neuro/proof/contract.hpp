@@ -15,8 +15,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -52,6 +54,49 @@ auto with_precondition(F&& f, Check&& check, std::string_view expr) {
             std::fprintf(stderr,
                          "neuro::proof: precondition failed: %s\n",
                          expr.c_str());
+        }
+        return f(std::forward<decltype(args)>(args)...);
+    };
+}
+
+// Counters for runtime contract diagnostics. The host scaffold
+// uses these to let tests observe how often a precondition fired
+// without scraping stderr. Real proof tools replace these with the
+// SMT solver's report.
+struct ContractStats {
+    std::uint64_t precondition_failures = 0;
+    std::uint64_t postcondition_failures = 0;
+
+    static ContractStats& instance() noexcept {
+        static ContractStats s;
+        return s;
+    }
+};
+
+inline void reset_contract_stats() noexcept {
+    ContractStats::instance() = ContractStats{};
+}
+
+// Thrown by with_strict_precondition / with_strict_postcondition
+// when the supplied predicate fails.
+struct ContractError : std::runtime_error {
+    explicit ContractError(std::string_view expr)
+        : std::runtime_error(std::string("contract: ") + std::string(expr)) {}
+    explicit ContractError(std::string_view where, std::string_view expr)
+        : std::runtime_error(std::string("contract: ") + std::string(where)
+                             + ": " + std::string(expr)) {}
+};
+
+// Strict variant of with_precondition: throws ContractError if the
+// precondition fails. Tests use this to verify expected failures.
+template <typename F, typename Check>
+auto with_strict_precondition(F&& f, Check&& check, std::string_view expr) {
+    return [f = std::forward<F>(f),
+            check = std::forward<Check>(check),
+            expr{std::string(expr)}](auto&&... args) -> decltype(auto) {
+        if (!check(std::forward<decltype(args)>(args)...)) {
+            ++ContractStats::instance().precondition_failures;
+            throw ContractError(expr);
         }
         return f(std::forward<decltype(args)>(args)...);
     };
