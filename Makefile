@@ -321,7 +321,8 @@ $(TEST_DIR)/unit/proc/thread_test.bin: $(TEST_DIR)/unit/proc/thread_test.cpp \
 # core/io tests are header-only.
 CORE_TESTS := $(TEST_DIR)/unit/core/io_test \
               $(TEST_DIR)/unit/core/span_test \
-              $(TEST_DIR)/unit/core/irq_test
+              $(TEST_DIR)/unit/core/irq_test \
+              $(TEST_DIR)/unit/core/object_table_test
 CORE_TESTS_BIN := $(addsuffix .bin,$(CORE_TESTS))
 
 $(TEST_DIR)/unit/core/io_test.bin: $(TEST_DIR)/unit/core/io_test.cpp \
@@ -340,6 +341,12 @@ $(TEST_DIR)/unit/core/irq_test.bin: $(TEST_DIR)/unit/core/irq_test.cpp \
                                    include/neuro/core/irq.hpp \
                                    include/neuro/core/kobject.hpp \
                                    $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
+
+$(TEST_DIR)/unit/core/object_table_test.bin: $(TEST_DIR)/unit/core/object_table_test.cpp \
+                                             include/neuro/core/object_table.hpp \
+                                             include/neuro/core/kobject.hpp \
+                                             $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< -o $@
 
 # net/channel tests are header-only (Channel<T> is templated).

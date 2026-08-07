@@ -53,9 +53,10 @@ public:
         if (slots_[idx].present && slots_[idx].id != obj->id()) {
             return false;
         }
+        const bool replacing = slots_[idx].present;
         slots_[idx] = ObjectSlot{obj->id(), obj->generation(),
                                  obj->kind(), obj, true};
-        ++count_;
+        if (!replacing) ++count_;
         return true;
     }
 
