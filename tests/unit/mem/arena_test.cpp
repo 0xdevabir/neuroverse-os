@@ -77,6 +77,42 @@ TEST(arena, reset_to_only_rewinds) {
     EXPECT_TRUE(a.used() >= 64u);
 }
 
+TEST(arena, reset_to_checkpoint_round_trip_reuses_address) {
+    // Z4.1: allocate, save checkpoint, allocate more, reset_to(cp),
+    // then allocate the same size — the new address must match the
+    // second allocation's address (since the first allocation sits BEFORE
+    // the checkpoint and is unaffected).
+    Arena a(1024);
+    (void)a.allocate(64, 16);                 // stable prefix
+    auto cp = a.save();
+    auto* p1 = a.allocate(128, 16);           // live allocation
+    (void)a.allocate(256, 16);                // will be undone
+    a.reset_to(cp);
+    auto* p2 = a.allocate(128, 16);
+    EXPECT_EQ(p1, p2);
+}
+
+TEST(arena, pointer_offset_within_arena_stable_after_reset) {
+    // Z4.2: a pointer captured before reset must still point to a
+    // valid offset within the arena after reset_to.
+    Arena a(1024);
+    auto* p1 = a.allocate(64, 16);
+    auto* p2 = a.allocate(64, 16);
+    auto cp = a.save();
+    (void)a.allocate(64, 16);
+    a.reset_to(cp);
+    // The offset of p1 (relative to base) is unchanged.
+    auto off_p1 = static_cast<std::size_t>(
+        reinterpret_cast<std::uintptr_t>(p1) -
+        reinterpret_cast<std::uintptr_t>(a.base()));
+    EXPECT_EQ(off_p1, 0u);  // first allocation
+    auto off_p2 = static_cast<std::size_t>(
+        reinterpret_cast<std::uintptr_t>(p2) -
+        reinterpret_cast<std::uintptr_t>(a.base()));
+    EXPECT_TRUE(off_p2 >= 64u);
+    EXPECT_TRUE(off_p2 <  128u);
+}
+
 TEST(arena, make_T_constructs_in_place) {
     struct Point { int x; int y; Point(int a, int b) : x(a), y(b) {} };
     Arena a(1024);
