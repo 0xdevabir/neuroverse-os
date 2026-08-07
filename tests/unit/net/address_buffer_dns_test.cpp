@@ -245,4 +245,26 @@ TEST(net, dns_resolve_unknown_throws) {
         std::runtime_error);
 }
 
+// Z6.6: resolve_v4 throws on the same bad hostname.
+TEST(net, dns_resolve_v4_unknown_throws) {
+    EXPECT_THROW(
+        Dns::resolve_v4("this-host-definitely-does-not-exist.invalid"),
+        std::runtime_error);
+}
+
+TEST(net, dns_resolve_v4_returns_empty_vector_or_throws_on_unknown) {
+    // Some implementations return an empty vector rather than throw;
+    // either is acceptable for the test to pass. We check that the
+    // call returns either an empty result or throws — never returns
+    // a non-empty bogus result.
+    bool threw = false;
+    std::vector<IpAddr> v;
+    try {
+        v = Dns::resolve_v4("this-host-definitely-does-not-exist.invalid");
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    EXPECT_TRUE(threw || v.empty());
+}
+
 RUN_ALL_TESTS()
