@@ -311,4 +311,105 @@ TEST(overlayfs, copy_up_is_idempotent) {
     EXPECT_EQ(first_id, second_v->handle().id);
 }
 
+// ---- Z6.9: upper-only OverlayVNode delegates to upper --------------
+
+TEST(overlayfs, vnode_upper_only_read_delegates_to_upper) {
+    auto upper = std::make_unique<MemFS>();
+    EXPECT_TRUE(upper->write_all("/file", bytes("UPPERONLY")).has_value());
+
+    OverlayVNode node(20, *upper->lookup("/file"), /*lower=*/nullptr);
+    std::array<std::byte, 16> buf{};
+    auto r = node.read(0, std::span<std::byte>(buf.data(), buf.size()));
+    EXPECT_TRUE(r.has_value());
+    EXPECT_EQ(static_cast<std::size_t>(9), *r);
+    EXPECT_EQ(static_cast<std::uint8_t>('U'), static_cast<std::uint8_t>(buf[0]));
+    EXPECT_EQ(static_cast<std::uint8_t>('Y'), static_cast<std::uint8_t>(buf[8]));
+}
+
+TEST(overlayfs, vnode_upper_only_write_routes_to_upper) {
+    auto upper = std::make_unique<MemFS>();
+    EXPECT_TRUE(upper->write_all("/file", bytes("original")).has_value());
+
+    OverlayVNode node(21, *upper->lookup("/file"), /*lower=*/nullptr);
+    auto w = node.write(0, bytes("REPLACED!"));
+    EXPECT_TRUE(w.has_value());
+    EXPECT_EQ(static_cast<std::size_t>(9), *w);
+
+    auto got = upper->read_all("/file");
+    EXPECT_TRUE(got.has_value());
+    EXPECT_EQ(std::string("REPLACED!"), text(*got));
+}
+
+TEST(overlayfs, vnode_upper_only_truncate_routes_to_upper) {
+    auto upper = std::make_unique<MemFS>();
+    EXPECT_TRUE(upper->write_all("/file", bytes("abcdefgh")).has_value());
+
+    OverlayVNode node(22, *upper->lookup("/file"), /*lower=*/nullptr);
+    EXPECT_TRUE(node.truncate(3).has_value());
+
+    auto got = upper->read_all("/file");
+    EXPECT_TRUE(got.has_value());
+    EXPECT_EQ(std::string("abc"), text(*got));
+}
+
+TEST(overlayfs, vnode_upper_only_stat_reflects_upper_size) {
+    auto upper = std::make_unique<MemFS>();
+    EXPECT_TRUE(upper->write_all("/file", bytes("12345")).has_value());
+
+    OverlayVNode node(23, *upper->lookup("/file"), /*lower=*/nullptr);
+    auto s = node.stat();
+    EXPECT_TRUE(s.has_value());
+    EXPECT_EQ(static_cast<std::uint64_t>(5), s->size);
+    EXPECT_EQ(FileType::Regular, s->type);
+}
+
+TEST(overlayfs, fs_upper_only_lookup_works_without_lower_entry) {
+    // An OverlayFS that owns only an upper layer. With no lower
+    // configured, lookup/open still succeed for paths in the upper.
+    OverlayFS overlay(/*lower=*/*std::make_unique<MemFS>().get());  // ignored
+    auto upper_owned = std::make_unique<MemFS>();
+    MemFS* upper_raw = upper_owned.get();
+    EXPECT_TRUE(upper_owned->write_all("/only-upper", bytes("UP")).has_value());
+    overlay.set_upper(std::move(upper_owned));
+
+    auto v = overlay.lookup("/only-upper");
+    EXPECT_TRUE(v.has_value());
+    EXPECT_EQ(static_cast<std::uint64_t>(2), (*v)->stat()->size);
+
+    auto fh = overlay.open("/only-upper", OpenFlags::Read);
+    EXPECT_TRUE(fh.has_value());
+    EXPECT_EQ(upper_raw->lookup("/only-upper").value()->handle(), fh->vnode);
+}
+
+TEST(overlayfs, fs_upper_only_open_create_lands_in_upper) {
+    OverlayFS overlay(*std::make_unique<MemFS>());
+    auto upper_owned = std::make_unique<MemFS>();
+    MemFS* upper_raw = upper_owned.get();
+    overlay.set_upper(std::move(upper_owned));
+
+    auto fh = overlay.open("/new", OpenFlags::Create | OpenFlags::Write);
+    EXPECT_TRUE(fh.has_value());
+    EXPECT_EQ(static_cast<std::size_t>(1), upper_raw->size());
+
+    // Write through the handle and read back from upper.
+    auto v = overlay.lookup("/new");
+    EXPECT_TRUE(v.has_value());
+    EXPECT_TRUE((*v)->write(0, bytes("hello")).has_value());
+
+    auto got = upper_raw->read_all("/new");
+    EXPECT_TRUE(got.has_value());
+    EXPECT_EQ(std::string("hello"), text(*got));
+}
+
+TEST(overlayfs, fs_upper_only_write_all_visible_through_overlay) {
+    OverlayFS overlay(*std::make_unique<MemFS>());
+    auto upper_owned = std::make_unique<MemFS>();
+    overlay.set_upper(std::move(upper_owned));
+
+    EXPECT_TRUE(overlay.write_all("/data", bytes("payload")).has_value());
+    auto got = overlay.read_all("/data");
+    EXPECT_TRUE(got.has_value());
+    EXPECT_EQ(std::string("payload"), text(*got));
+}
+
 RUN_ALL_TESTS()
