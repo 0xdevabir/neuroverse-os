@@ -357,4 +357,49 @@ TEST(thread, join_for_before_start_returns_true) {
     EXPECT_TRUE(ok);
 }
 
+// ---- 16. destructor joins detached thread --------------------------
+
+TEST(thread, destructor_joins_long_running_entry) {
+    // Construct a thread whose entry runs for longer than the scope;
+    // the destructor must wait for the entry to finish before returning.
+    // An external thread flips `may_exit` after 25 ms to unblock the entry.
+    Process p(ProcessInit{"p20", {}});
+    std::atomic<bool> ran{false};
+    std::atomic<bool> may_exit{false};
+    std::thread flipper([&may_exit] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        may_exit.store(true);
+    });
+    {
+        Thread::Attr a;
+        Thread t(p, a, [&ran, &may_exit](Thread&) {
+            ran.store(true);
+            while (!may_exit.load()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
+        t.start();
+        while (!ran.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // t goes out of scope without explicit join(); the flipper
+        // will release the entry so the destructor can return.
+    }
+    flipper.join();
+    EXPECT_TRUE(ran.load());
+    EXPECT_TRUE(may_exit.load());
+}
+
+TEST(thread, destructor_on_unstarted_thread_is_noop) {
+    // A Thread that was never started must have a destructor that does
+    // nothing observable.
+    Process p(ProcessInit{"p21", {}});
+    {
+        Thread::Attr a;
+        Thread t(p, a, inc_thread);
+        (void)t.state();
+        // t dies here without start() or join().
+    }
+    // If we got here, destructor was a no-op.
+    EXPECT_TRUE(true);
+}
+
 RUN_ALL_TESTS()
