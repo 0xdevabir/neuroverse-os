@@ -296,4 +296,46 @@ TEST(memfs, append_advances_vnode_size) {
     EXPECT_EQ(static_cast<std::uint64_t>(6), stat->size);
 }
 
+// ---- Z6.8: read at exact EOF returns 0 bytes, read past EOF errors --
+
+TEST(memfs, vnode_read_at_exact_size_with_buffer_sized_zero_returns_zero) {
+    // Reading at offset == size with a non-empty buffer should still
+    // return 0 (we never touch the buffer).
+    MemVNode node(1, "/file");
+    node.load(bytes("abc"));
+    std::array<std::byte, 16> out{};
+    auto read = node.read(3, out);
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(static_cast<std::size_t>(0), *read);
+}
+
+TEST(memfs, vnode_read_at_exact_size_with_empty_span) {
+    // Even with a zero-length span, reading at offset == size returns 0.
+    MemVNode node(1, "/file");
+    node.load(bytes("abc"));
+    std::span<std::byte> out{};
+    auto read = node.read(3, out);
+    EXPECT_TRUE(read.has_value());
+    EXPECT_EQ(static_cast<std::size_t>(0), *read);
+}
+
+TEST(memfs, vnode_read_past_size_by_one_errors) {
+    MemVNode node(1, "/file");
+    node.load(bytes("abc"));
+    std::array<std::byte, 1> out{};
+    auto read = node.read(4, out);
+    EXPECT_FALSE(read.has_value());
+    EXPECT_EQ(ErrorKind::InvalidArgument, read.error().kind);
+}
+
+TEST(memfs, fs_read_all_of_empty_file_returns_empty_vector) {
+    // An empty file should produce an empty vector — the loop should
+    // terminate at total == out.size() == 0 immediately.
+    MemFS fs;
+    EXPECT_TRUE(fs.open("/empty", OpenFlags::Create).has_value());
+    auto read = fs.read_all("/empty");
+    EXPECT_TRUE(read.has_value());
+    EXPECT_TRUE(read->empty());
+}
+
 RUN_ALL_TESTS()
