@@ -305,4 +305,120 @@ TEST(ipc_endpoint, recv_awaiter_receives_multiple_messages_in_order) {
     EXPECT_EQ(2, b_done.load());
 }
 
+// ---- 9. send coroutine drains endpoint under load --------------
+
+namespace {
+
+struct DrainSendTask {
+    struct promise_type {
+        Endpoint* ep = nullptr;
+        int       total = 0;
+        std::atomic<int>* counter = nullptr;
+
+        DrainSendTask get_return_object() noexcept {
+            return DrainSendTask{
+                std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+        std::suspend_always initial_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void return_void() noexcept {}
+        void unhandled_exception() noexcept { std::terminate(); }
+    };
+    std::coroutine_handle<promise_type> h;
+    DrainSendTask(std::coroutine_handle<promise_type> handle) noexcept
+        : h(handle) {}
+    ~DrainSendTask() { if (h) h.destroy(); }
+};
+
+DrainSendTask co_drain_send(Endpoint& ep, int total, std::atomic<int>* counter) {
+    for (int i = 0; i < total; ++i) {
+        // Tag carries the full i; payload carries i as a uint16_t (LE) so
+        // the sum check works for totals > 255.
+        std::uint16_t v = static_cast<std::uint16_t>(i);
+        co_await ep.send(Message(Tag(0, v),
+                                 bytes({static_cast<std::uint8_t>(v & 0xFF),
+                                        static_cast<std::uint8_t>((v >> 8) & 0xFF)})));
+    }
+    counter->store(total);
+    co_return;
+}
+
+}  // namespace
+
+TEST(ipc_endpoint, send_coroutine_drains_1000_messages) {
+    Endpoint ep;
+    constexpr int N = 1000;
+    std::atomic<int> done{0};
+    auto task = co_drain_send(ep, N, &done);
+    task.h.resume();
+
+    // Drain in FIFO order and confirm every message landed.
+    int sum = 0;
+    for (int i = 0; i < N; ++i) {
+        auto m = ep.try_recv();
+        EXPECT_TRUE(m.has_value());
+        EXPECT_EQ(static_cast<std::uint16_t>(i), m->tag.op);
+        std::uint16_t v = static_cast<std::uint16_t>(
+            static_cast<std::uint8_t>(m->payload[0]) |
+            (static_cast<std::uint16_t>(static_cast<std::uint8_t>(m->payload[1])) << 8));
+        sum += v;
+    }
+    EXPECT_EQ(N, done.load());
+    EXPECT_EQ(static_cast<std::size_t>(0), ep.size());
+
+    // Sum 0..999 == 499500.
+    EXPECT_EQ(499500, sum);
+}
+
+TEST(ipc_endpoint, send_coroutine_and_recv_awaiter_interleave) {
+    // Sender coroutine co_await ep.send; receiver coroutine co_await ep.recv.
+    // Together they exchange N messages in order.
+    Endpoint ep;
+    constexpr int N = 100;
+    std::atomic<int> sent{0};
+
+    struct DrainRecvTask {
+        struct promise_type {
+            Endpoint* ep = nullptr;
+            int       total = 0;
+            std::atomic<int>* counter = nullptr;
+            DrainRecvTask get_return_object() noexcept {
+                return DrainRecvTask{
+                    std::coroutine_handle<promise_type>::from_promise(*this)};
+            }
+            std::suspend_always initial_suspend() noexcept { return {}; }
+            std::suspend_always final_suspend() noexcept { return {}; }
+            void return_void() noexcept {}
+            void unhandled_exception() noexcept { std::terminate(); }
+        };
+        std::coroutine_handle<promise_type> h;
+        DrainRecvTask(std::coroutine_handle<promise_type> handle) noexcept
+            : h(handle) {}
+        ~DrainRecvTask() { if (h) h.destroy(); }
+    };
+
+    auto drain_recv = [](Endpoint& ep, int total, std::atomic<int>* counter)
+        -> DrainRecvTask {
+        int sum = 0;
+        for (int i = 0; i < total; ++i) {
+            auto m = co_await ep.recv();
+            sum += static_cast<int>(m.payload[0]);
+        }
+        counter->store(sum);
+        co_return;
+    };
+
+    std::atomic<int> sum_seen{-1};
+    auto receiver = drain_recv(ep, N, &sum_seen);
+    receiver.h.resume();  // parks
+
+    auto sender = co_drain_send(ep, N, &sent);
+    sender.h.resume();    // each send unblocks the receiver's await
+
+    // Give the coroutine a chance to resume.
+    while (sum_seen.load() == -1) std::this_thread::yield();
+    EXPECT_EQ(N, sent.load());
+    EXPECT_EQ(4950, sum_seen.load());  // sum 0..99 == 4950
+}
+
 RUN_ALL_TESTS()
