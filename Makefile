@@ -164,7 +164,9 @@ $(TEST_DIR)/unit/mem/pool_test.bin: $(TEST_DIR)/unit/mem/pool_test.cpp \
 PKG_TESTS := $(TEST_DIR)/unit/pkg/sha3_test \
              $(TEST_DIR)/unit/pkg/sha3_family_test \
              $(TEST_DIR)/unit/pkg/manifest_test
+BOOT_TESTS := $(TEST_DIR)/unit/boot/protocol_test
 PKG_TESTS_BIN := $(addsuffix .bin,$(PKG_TESTS))
+BOOT_TESTS_BIN := $(addsuffix .bin,$(BOOT_TESTS))
 
 # sha3_test is header-only (sha3.hpp is inline).
 $(TEST_DIR)/unit/pkg/sha3_test.bin: $(TEST_DIR)/unit/pkg/sha3_test.cpp \
@@ -188,6 +190,14 @@ $(TEST_DIR)/unit/pkg/manifest_test.bin: $(TEST_DIR)/unit/pkg/manifest_test.cpp \
                                         neuro_pkg.o \
                                         $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_pkg.o -o $@
+
+# boot signing/verification tests link the boot subsystem.
+$(TEST_DIR)/unit/boot/protocol_test.bin: $(TEST_DIR)/unit/boot/protocol_test.cpp \
+                                          include/neuro/boot/protocol.hpp \
+                                          include/neuro/pkg/sha3.hpp \
+                                          neuro_boot.o \
+                                          $(TEST_DIR)/test_framework.hpp
+	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_boot.o -o $@
 
 INTEGRATION_TESTS := $(TEST_DIR)/integration/sched_steal \
                     $(TEST_DIR)/integration/ipc_pingpong \
@@ -239,8 +249,8 @@ $(TEST_DIR)/integration/fs_memfs.bin: $(TEST_DIR)/integration/fs_memfs.cpp \
                                        $(TEST_DIR)/test_framework.hpp
 	$(CXX) $(CXXFLAGS) $(TEST_INCLUDES) $< neuro_memfs.o neuro_overlayfs.o -o $@
 
-test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
-	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
+test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	@for t in $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN); do \
 	    echo "==> $$t"; \
 	    ./$$t || exit $$?; \
 	done
@@ -248,6 +258,6 @@ test: $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(INTEGRATION_TEST
 clean:
 	rm -f $(BIN) $(UMBRELLA_BIN)
 	rm -f $(NEURO_LIB_OBJS)
-	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
+	rm -f $(SECURITY_TESTS_BIN) $(MEM_TESTS_BIN) $(PKG_TESTS_BIN) $(BOOT_TESTS_BIN) $(INTEGRATION_TESTS_BIN)
 
 .PHONY: all run test clean

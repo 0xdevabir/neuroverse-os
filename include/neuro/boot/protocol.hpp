@@ -1,6 +1,6 @@
 // neuro/boot/protocol.hpp
 //
-// Boot protocol skeleton (NeuroBoot, README §4.18).
+// Boot protocol (NeuroBoot, README §4.18).
 //
 // Per README §4.18 the boot process hands off a capability bundle
 // from firmware to the kernel. The bundle carries:
@@ -8,18 +8,30 @@
 //   - a list of segments (text / rodata / data / bss with load
 //     addresses and sizes),
 //   - a list of initial capabilities the kernel is given at start.
+//   - a content_root + signature that prove the manifest was
+//     produced by a holder of the boot trust root.
 // On the host we expose the trait surface + a builder + parser
 // using a stable text format; the real TLV-encoded binary bundle
 // lands in Phase 1.
+//
+// Signing on the host:
+//   signature = SHA3-512( trust_root || canonicalise(manifest) )
+// This is a hash-MAC construction — adequate for the host
+// scaffold but NOT a real signature scheme. The real Ed25519 /
+// Dilithium signing lands with the kernel crypto subsystem in
+// Phase 1; the host verifier is the same shape, so the wiring
+// doesn't have to change when the algorithm does.
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "neuro/core/capability.hpp"   // Capability
+#include "neuro/pkg/digest.hpp"        // Digest256, Digest512
 
 namespace neuro::boot {
 
@@ -86,8 +98,10 @@ inline bool parse_text(const std::string& s, Manifest& out) {
         if (colon == std::string::npos) continue;
         std::string key = line.substr(0, colon);
         std::string val = line.substr(colon + 1);
-        // strip one optional leading space
-        if (!val.empty() && val.front() == ' ') val.erase(0, 1);
+        // strip any leading whitespace
+        std::size_t j = 0;
+        while (j < val.size() && (val[j] == ' ' || val[j] == '\t')) ++j;
+        val.erase(0, j);
 
         if (key == "version")      out.kernel_version = val;
         else if (key == "build")   out.build_id       = val;
@@ -125,5 +139,100 @@ inline bool parse_text(const std::string& s, Manifest& out) {
 // Singleton factory: parses from a known text or returns a default
 // empty manifest. Real implementation reads from firmware in Phase 1.
 Manifest host_boot_manifest();
+
+// ---- Signed boot chain --------------------------------------------------
+//
+// The trust root is the SHA3-256 of the build-time signing secret.
+// It's small enough to embed in firmware and serves as the symmetric
+// key in the host-scaffold hash-MAC. Phase 1 swaps this for a real
+// public-key signature; callers don't have to change.
+//
+//   sign(m, trust_root)   = SHA3-512( trust_root || canonicalise(m) )
+//   verify(m, sig, trust_root) true iff sig == sign(m, trust_root)
+//
+// canonicalise() is a deterministic byte-string encoding of the
+// manifest (see below).
+
+using Signature = neuro::pkg::Digest512;  // SHA3-512 of (trust_root || bytes)
+using TrustRoot = neuro::pkg::Digest256;  // SHA3-256 of the build-time secret
+
+// Produces the exact byte-string that the signature covers. The
+// format mirrors Manifest::canonicalise() in pkg/store.hpp so the
+// host boot path and the host pkg path can share a verifier.
+inline std::vector<std::byte>
+canonicalise(const Manifest& m) {
+    std::vector<std::byte> out;
+    auto append_be32 = [&](std::uint32_t n) {
+        out.push_back(static_cast<std::byte>((n >> 24) & 0xFF));
+        out.push_back(static_cast<std::byte>((n >> 16) & 0xFF));
+        out.push_back(static_cast<std::byte>((n >>  8) & 0xFF));
+        out.push_back(static_cast<std::byte>( n        & 0xFF));
+    };
+    auto append_str = [&](const std::string& s) {
+        append_be32(static_cast<std::uint32_t>(s.size()));
+        out.insert(out.end(),
+                   reinterpret_cast<const std::byte*>(s.data()),
+                   reinterpret_cast<const std::byte*>(s.data()) + s.size());
+    };
+    auto append_be64 = [&](std::uint64_t n) {
+        for (int i = 7; i >= 0; --i) {
+            out.push_back(static_cast<std::byte>((n >> (i * 8)) & 0xFF));
+        }
+    };
+
+    append_str(m.kernel_version);
+    append_str(m.build_id);
+    append_be32(static_cast<std::uint32_t>(m.segments.size()));
+    for (const auto& s : m.segments) {
+        append_str(s.name);
+        // kind as 1 byte (Text=0, Rodata=1, Data=2, Bss=3)
+        std::uint8_t kind_byte = 0;
+        switch (s.kind) {
+            case Segment::Kind::Text:   kind_byte = 0; break;
+            case Segment::Kind::Rodata: kind_byte = 1; break;
+            case Segment::Kind::Data:   kind_byte = 2; break;
+            case Segment::Kind::Bss:    kind_byte = 3; break;
+        }
+        out.push_back(static_cast<std::byte>(kind_byte));
+        append_be64(s.vaddr);
+        append_be64(s.memsz);
+        append_be64(s.filesz);
+        append_be64(s.hash);
+    }
+    append_be32(static_cast<std::uint32_t>(m.capabilities.size()));
+    for (const auto& c : m.capabilities) {
+        // The capability carries its own opaque 16-byte body; emit it
+        // raw for verification. The to_string() form is human-readable
+        // and isn't suitable for hashing.
+        const std::uint8_t* cap_bytes = reinterpret_cast<const std::uint8_t*>(&c);
+        out.insert(out.end(),
+                   reinterpret_cast<const std::byte*>(cap_bytes),
+                   reinterpret_cast<const std::byte*>(cap_bytes + sizeof(c)));
+    }
+    return out;
+}
+
+// Compute the SHA3-512 of (trust_root || canonicalise(m)). The
+// trust_root is used as a domain-separation prefix so signatures
+// for different roots never collide. The hash covers every byte
+// of the canonical encoding.
+Signature sign(const Manifest& m, const TrustRoot& trust_root);
+
+// True iff `sig` equals SHA3-512(trust_root || canonicalise(m)).
+[[nodiscard]] bool verify(const Manifest& m,
+                          const Signature& sig,
+                          const TrustRoot& trust_root) noexcept;
+
+// Best-effort convenience: derive a trust_root from a human-readable
+// passphrase. Real firmware bakes this in at build time; the host
+// scaffold accepts any UTF-8 string.
+[[nodiscard]] TrustRoot trust_root_from_passphrase(
+    std::string_view passphrase) noexcept;
+
+// Loader for a "known-good" boot manifest. Calls verify() with the
+// host's hard-coded trust_root; returns std::nullopt if the manifest
+// doesn't authenticate.
+[[nodiscard]] std::optional<Manifest>
+load_signed_manifest(const Manifest& m, const Signature& sig) noexcept;
 
 }  // namespace neuro::boot
